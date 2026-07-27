@@ -1,0 +1,113 @@
+{
+  "entities": {
+    "Worker": {
+      "title": "Worker Profile",
+      "description": "The digital profile of a skilled worker, including their photo, skill types, daily rate, and real-time availability.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the worker."
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the worker."
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number of the worker."
+        },
+        "skills": {
+          "type": "array",
+          "description": "List of skill tags matched from pre-defined chips."
+        },
+        "dailyRate": {
+          "type": "number",
+          "description": "Standard daily work rate in Indian Rupees (INR)."
+        },
+        "locationName": {
+          "type": "string",
+          "description": "Neighborhood or village name of the worker."
+        },
+        "latitude": {
+          "type": "number",
+          "description": "Latitude for distance calculations."
+        },
+        "longitude": {
+          "type": "number",
+          "description": "Longitude for distance calculations."
+        },
+        "photo": {
+          "type": "string",
+          "description": "Profile picture (image URLs or base64 representation)."
+        },
+        "gallery": {
+          "type": "array",
+          "description": "Up to 3 photos of recent works (image URLs or base64)."
+        },
+        "isAvailable": {
+          "type": "boolean",
+          "description": "Toggle indicating if the worker is available for work today."
+        },
+        "experience": {
+          "type": "number",
+          "description": "Years of experience in the skilled labor."
+        },
+        "about": {
+          "type": "string",
+          "description": "Short bio or statement of pride/experience."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the profile was last updated."
+        }
+      },
+      "required": ["uid", "name", "phone", "skills", "dailyRate", "locationName", "isAvailable", "photo", "gallery"]
+    },
+    "Review": {
+      "title": "Worker Review",
+      "description": "Review or rating submitted by a customer for verified past work.",
+      "type": "object",
+      "properties": {
+        "workerId": {
+          "type": "string",
+          "description": "UID of the worker who received the review."
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Name of the customer providing review."
+        },
+        "rating": {
+          "type": "number",
+          "description": "Rating out of 5 stars."
+        },
+        "comment": {
+          "type": "string",
+          "description": "Detailed comment about the work quality."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the review was written."
+        }
+      },
+      "required": ["workerId", "authorName", "rating", "comment", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/workers/{workerId}": {
+      "schema": "Worker",
+      "description": "Collection of skilled worker digital identities."
+    },
+    "/workers/{workerId}/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Customer reviews for a specific worker."
+    }
+  }
+}

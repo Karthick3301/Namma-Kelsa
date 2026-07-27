@@ -1,0 +1,110 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Auth tokens do not contain custom claims; verify matches request UID
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validate Worker entity structure
+    function isValidWorker(data) {
+      return data.keys().hasAll([
+        'uid', 'name', 'phone', 'skills', 'dailyRate', 'locationName',
+        'latitude', 'longitude', 'isAvailable', 'photo', 'gallery',
+        'experience', 'about', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().size() == 15 &&
+      data.uid == request.auth.uid &&
+      data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+      data.phone is string && data.phone.size() > 0 && data.phone.size() <= 20 &&
+      data.skills is list && data.skills.size() <= 10 && (data.skills.size() == 0 || data.skills[0] is string) &&
+      data.dailyRate is number && data.dailyRate >= 0 && data.dailyRate <= 100000 &&
+      data.locationName is string && data.locationName.size() > 0 && data.locationName.size() <= 200 &&
+      data.latitude is number && data.longitude is number &&
+      data.isAvailable is bool &&
+      data.photo is string && data.photo.size() <= 600000 &&
+      data.gallery is list && data.gallery.size() <= 3 && (data.gallery.size() == 0 || data.gallery[0] is string) &&
+      data.experience is number && data.experience >= 0 && data.experience <= 60 &&
+      data.about is string && data.about.size() <= 1000 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // Validate Review entity structure
+    function isValidReview(data) {
+      return data.keys().hasAll([
+        'workerId', 'authorName', 'authorId', 'rating', 'comment', 'createdAt'
+      ]) &&
+      data.keys().size() == 6 &&
+      data.workerId is string &&
+      data.authorName is string && data.authorName.size() > 0 && data.authorName.size() <= 100 &&
+      data.authorId == request.auth.uid &&
+      data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+      data.comment is string && data.comment.size() >= 0 && data.comment.size() <= 1000 &&
+      data.createdAt is timestamp;
+    }
+
+    // Match Workers
+    match /workers/{workerId} {
+      allow read, list: if true; // Public directory access
+
+      allow create: if isOwner(workerId) 
+        && isValidId(workerId)
+        && isValidWorker(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isOwner(workerId)
+        && isValidId(workerId)
+        && isValidWorker(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Toggle availability only
+          (incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'updatedAt'])) ||
+          // Action 2: Update complete profile details
+          (incoming().diff(existing()).affectedKeys().hasAny(['name', 'phone', 'skills', 'dailyRate', 'locationName', 'latitude', 'longitude', 'photo', 'gallery', 'experience', 'about', 'updatedAt']))
+        );
+
+      allow delete: if isOwner(workerId) && isValidId(workerId);
+
+      // Subcollection for Reviews
+      match /reviews/{reviewId} {
+        allow read, list: if true; // Reviews are public
+
+        allow create: if isSignedIn()
+          && isValidId(reviewId)
+          && isValidReview(incoming())
+          && incoming().workerId == workerId
+          && incoming().createdAt == request.time;
+
+        // Reviews are immutable after creation
+        allow update, delete: if false;
+      }
+    }
+  }
+}

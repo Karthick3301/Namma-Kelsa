@@ -1,0 +1,6 @@
+{
+  "name": "Namma-Kelsa",
+  "description": "A dignity-first digital directory and marketplace for daily wage skilled laborers to list their portfolios and update their availability in real time.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
