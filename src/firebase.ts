@@ -9,6 +9,7 @@ import {
 } from "firebase/auth";
 import { 
   getFirestore, 
+  initializeFirestore,
   doc, 
   getDoc, 
   getDocFromServer,
@@ -25,6 +26,17 @@ import firebaseConfig from "../firebase-applet-config.json";
 
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
+
+// Configure Firestore with long polling to prevent WebChannel stream buffering / 10-second timeout in iframe & proxy environments
+if (typeof window !== "undefined") {
+  try {
+    initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    }, firebaseConfig.firestoreDatabaseId);
+  } catch (e) {
+    // Already initialized
+  }
+}
 
 // Initialize Services
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
@@ -93,7 +105,7 @@ export async function testConnection() {
     console.log("Firebase connection verified and active!");
   } catch (error) {
     if (error instanceof Error && error.message.includes("the client is offline")) {
-      console.error("Please check your Firebase configuration or network status.");
+      console.error("Please check your Firebase configuration.");
     }
   }
 }

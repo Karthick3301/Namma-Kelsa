@@ -33,10 +33,9 @@ service cloud.firestore {
     function isValidWorker(data) {
       return data.keys().hasAll([
         'uid', 'name', 'phone', 'skills', 'dailyRate', 'locationName',
-        'latitude', 'longitude', 'isAvailable', 'photo', 'gallery',
+        'latitude', 'longitude', 'isAvailable', 'photo',
         'experience', 'about', 'createdAt', 'updatedAt'
       ]) &&
-      data.keys().size() == 15 &&
       data.uid == request.auth.uid &&
       data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
       data.phone is string && data.phone.size() > 0 && data.phone.size() <= 20 &&
@@ -46,7 +45,10 @@ service cloud.firestore {
       data.latitude is number && data.longitude is number &&
       data.isAvailable is bool &&
       data.photo is string && data.photo.size() <= 600000 &&
-      data.gallery is list && data.gallery.size() <= 3 && (data.gallery.size() == 0 || data.gallery[0] is string) &&
+      (!('gallery' in data) || (data.gallery is list && data.gallery.size() <= 12)) &&
+      (!('imageUrls' in data) || (data.imageUrls is list && data.imageUrls.size() <= 12)) &&
+      (!('unavailableDates' in data) || (data.unavailableDates is list && data.unavailableDates.size() <= 60)) &&
+      (!('skillProficiencies' in data) || (data.skillProficiencies is map)) &&
       data.experience is number && data.experience >= 0 && data.experience <= 60 &&
       data.about is string && data.about.size() <= 1000 &&
       data.createdAt is timestamp &&
@@ -84,10 +86,12 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          // Action 1: Toggle availability only
+          // Action 1: Toggle availability or unavailable dates
           (incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'updatedAt'])) ||
+          (incoming().diff(existing()).affectedKeys().hasOnly(['unavailableDates', 'updatedAt'])) ||
+          (incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'unavailableDates', 'updatedAt'])) ||
           // Action 2: Update complete profile details
-          (incoming().diff(existing()).affectedKeys().hasAny(['name', 'phone', 'skills', 'dailyRate', 'locationName', 'latitude', 'longitude', 'photo', 'gallery', 'experience', 'about', 'updatedAt']))
+          (incoming().diff(existing()).affectedKeys().hasAny(['name', 'phone', 'skills', 'dailyRate', 'locationName', 'latitude', 'longitude', 'photo', 'gallery', 'imageUrls', 'experience', 'about', 'unavailableDates', 'updatedAt']))
         );
 
       allow delete: if isOwner(workerId) && isValidId(workerId);
@@ -104,6 +108,18 @@ service cloud.firestore {
 
         // Reviews are immutable after creation
         allow update, delete: if false;
+      }
+
+      // Subcollection for Inquiries
+      match /inquiries/{inquiryId} {
+        allow read, list: if isOwner(workerId);
+
+        allow create: if isValidId(inquiryId)
+          && incoming().workerId == workerId
+          && incoming().message is string && incoming().message.size() > 0 && incoming().message.size() <= 1000
+          && incoming().createdAt == request.time;
+
+        allow update, delete: if isOwner(workerId);
       }
     }
   }

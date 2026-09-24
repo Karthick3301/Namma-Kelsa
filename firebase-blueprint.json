@@ -41,6 +41,10 @@
           "type": "string",
           "description": "Profile picture (image URLs or base64 representation)."
         },
+        "imageUrls": {
+          "type": "array",
+          "description": "Image URLs of past work samples displayed in worker profile grid."
+        },
         "gallery": {
           "type": "array",
           "description": "Up to 3 photos of recent works (image URLs or base64)."
@@ -48,6 +52,14 @@
         "isAvailable": {
           "type": "boolean",
           "description": "Toggle indicating if the worker is available for work today."
+        },
+        "unavailableDates": {
+          "type": "array",
+          "description": "List of upcoming dates (YYYY-MM-DD) marked as unavailable by the worker."
+        },
+        "skillProficiencies": {
+          "type": "object",
+          "description": "Self-assessed proficiency scores (0-100) across listed skills."
         },
         "experience": {
           "type": "number",
@@ -79,6 +91,10 @@
           "type": "string",
           "description": "UID of the worker who received the review."
         },
+        "authorId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the customer who posted the review."
+        },
         "authorName": {
           "type": "string",
           "description": "Name of the customer providing review."
@@ -97,7 +113,40 @@
           "description": "Timestamp when the review was written."
         }
       },
-      "required": ["workerId", "authorName", "rating", "comment", "createdAt"]
+      "required": ["workerId", "authorId", "authorName", "rating", "comment", "createdAt"]
+    },
+    "Inquiry": {
+      "title": "Customer Inquiry",
+      "description": "Work or booking inquiry submitted by a customer to a worker.",
+      "type": "object",
+      "properties": {
+        "workerId": {
+          "type": "string",
+          "description": "UID of the worker receiving the inquiry."
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Name or contact of the customer inquiring."
+        },
+        "customerPhone": {
+          "type": "string",
+          "description": "Phone number or WhatsApp contact of the customer."
+        },
+        "message": {
+          "type": "string",
+          "description": "Details of the inquiry, work required, or date requested."
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Whether the worker has viewed or read the inquiry."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the inquiry was submitted."
+        }
+      },
+      "required": ["workerId", "customerName", "message", "createdAt"]
     }
   },
   "firestore": {
@@ -108,6 +157,10 @@
     "/workers/{workerId}/reviews/{reviewId}": {
       "schema": "Review",
       "description": "Customer reviews for a specific worker."
+    },
+    "/workers/{workerId}/inquiries/{inquiryId}": {
+      "schema": "Inquiry",
+      "description": "Incoming inquiries and messages sent to this worker by local customers."
     }
   }
 }

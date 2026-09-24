@@ -156,6 +156,11 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     longitude: 77.3940,
     isAvailable: true,
     photo: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=150",
+    imageUrls: [
+      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600",
+      "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=600",
+      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600"
+    ],
     gallery: [
       "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=300",
       "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=300",
@@ -175,6 +180,11 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     longitude: 77.4850,
     isAvailable: true,
     photo: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&q=80&w=150",
+    imageUrls: [
+      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600",
+      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600",
+      "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=600"
+    ],
     gallery: [
       "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300",
       "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=300",
@@ -194,6 +204,11 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     longitude: 77.5910,
     isAvailable: false,
     photo: "https://images.unsplash.com/photo-1592417817098-8f3d6fe19665?auto=format&fit=crop&q=80&w=150",
+    imageUrls: [
+      "https://images.unsplash.com/photo-1558904541-efa8c1a68fc6?auto=format&fit=crop&q=80&w=600",
+      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600",
+      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600"
+    ],
     gallery: [
       "https://images.unsplash.com/photo-1558904541-efa8c1a68fc6?auto=format&fit=crop&q=80&w=300",
       "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=300",
@@ -203,3 +218,254 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     about: "Passionate community gardener offering complete organic lawn care, trimming, and flower design. Crafting beautiful garden layouts."
   }
 ];
+
+/**
+ * Format a Date object to 'YYYY-MM-DD' ISO format based on local date.
+ */
+export function formatDateToISO(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Returns formatted relative or human-readable date.
+ * e.g., "Tomorrow (Fri, 25 Sep)" or "Sat, 26 Sep"
+ */
+export function formatDisplayDate(isoString: string): string {
+  if (!isoString) return "";
+  const parts = isoString.split("-").map(Number);
+  if (parts.length !== 3) return isoString;
+  const targetDate = new Date(parts[0], parts[1] - 1, parts[2]);
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const targetMidnight = new Date(targetDate);
+  targetMidnight.setHours(0, 0, 0, 0);
+  
+  const diffDays = Math.round((targetMidnight.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  
+  const options: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" };
+  const formatted = targetDate.toLocaleDateString("en-US", options);
+  
+  if (diffDays === 0) return `Today (${formatted})`;
+  if (diffDays === 1) return `Tomorrow (${formatted})`;
+  return formatted;
+}
+
+export interface UpcomingDayInfo {
+  date: Date;
+  iso: string;
+  dayName: string;
+  dayNumber: number;
+  monthName: string;
+  isToday: boolean;
+  isTomorrow: boolean;
+  isWeekend: boolean;
+}
+
+/**
+ * Generates an array of consecutive days starting from today.
+ */
+export function getUpcomingDays(count: number = 14): UpcomingDayInfo[] {
+  const days: UpcomingDayInfo[] = [];
+  const base = new Date();
+  base.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < count; i++) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    const iso = formatDateToISO(d);
+    const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+    const monthName = d.toLocaleDateString("en-US", { month: "short" });
+    const dayNumber = d.getDate();
+    const dayOfWeek = d.getDay(); // 0 is Sunday, 6 is Saturday
+
+    days.push({
+      date: d,
+      iso,
+      dayName,
+      dayNumber,
+      monthName,
+      isToday: i === 0,
+      isTomorrow: i === 1,
+      isWeekend: dayOfWeek === 0 || dayOfWeek === 6
+    });
+  }
+  return days;
+}
+
+// Add sample upcoming dates to MOCK_WORKERS
+const getOffsetDateISO = (offsetDays: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return formatDateToISO(d);
+};
+
+MOCK_WORKERS[0].unavailableDates = [getOffsetDateISO(1), getOffsetDateISO(4)];
+MOCK_WORKERS[1].unavailableDates = [getOffsetDateISO(2)];
+MOCK_WORKERS[2].unavailableDates = [getOffsetDateISO(0), getOffsetDateISO(1)];
+
+export interface SkillTheme {
+  bg: string;
+  text: string;
+  border: string;
+  badge: string;
+  iconColor: string;
+  dotColor: string;
+  iconName: string;
+}
+
+/**
+ * Returns distinct visual styling and icon metadata for skill pills.
+ * Enables colorful individual pills that establish high visual hierarchy and instant recognition.
+ */
+export function getSkillTheme(skillName: string): SkillTheme {
+  const normalized = (skillName || "").trim().toLowerCase();
+
+  if (normalized.includes("paint")) {
+    return {
+      bg: "bg-violet-50/90",
+      text: "text-violet-900",
+      border: "border-violet-200",
+      badge: "bg-violet-100 text-violet-800",
+      iconColor: "text-violet-600",
+      dotColor: "bg-violet-500",
+      iconName: "Paintbrush"
+    };
+  }
+
+  if (normalized.includes("plumb") || normalized.includes("water") || normalized.includes("pipe")) {
+    return {
+      bg: "bg-sky-50/90",
+      text: "text-sky-900",
+      border: "border-sky-200",
+      badge: "bg-sky-100 text-sky-800",
+      iconColor: "text-sky-600",
+      dotColor: "bg-sky-500",
+      iconName: "Droplet"
+    };
+  }
+
+  if (normalized.includes("electr") || normalized.includes("wire") || normalized.includes("power") || normalized.includes("solar")) {
+    return {
+      bg: "bg-amber-50/90",
+      text: "text-amber-950",
+      border: "border-amber-200",
+      badge: "bg-amber-100 text-amber-900",
+      iconColor: "text-amber-600",
+      dotColor: "bg-amber-500",
+      iconName: "Zap"
+    };
+  }
+
+  if (normalized.includes("garden") || normalized.includes("lawn") || normalized.includes("plant") || normalized.includes("farm")) {
+    return {
+      bg: "bg-emerald-50/90",
+      text: "text-emerald-950",
+      border: "border-emerald-200",
+      badge: "bg-emerald-100 text-emerald-800",
+      iconColor: "text-emerald-600",
+      dotColor: "bg-emerald-500",
+      iconName: "Leaf"
+    };
+  }
+
+  if (normalized.includes("tile") || normalized.includes("tiling") || normalized.includes("floor") || normalized.includes("marble") || normalized.includes("granite")) {
+    return {
+      bg: "bg-teal-50/90",
+      text: "text-teal-950",
+      border: "border-teal-200",
+      badge: "bg-teal-100 text-teal-800",
+      iconColor: "text-teal-600",
+      dotColor: "bg-teal-500",
+      iconName: "Grid"
+    };
+  }
+
+  if (normalized.includes("carpent") || normalized.includes("wood") || normalized.includes("furniture")) {
+    return {
+      bg: "bg-orange-50/90",
+      text: "text-orange-950",
+      border: "border-orange-200",
+      badge: "bg-orange-100 text-orange-900",
+      iconColor: "text-orange-600",
+      dotColor: "bg-orange-500",
+      iconName: "Hammer"
+    };
+  }
+
+  if (normalized.includes("mason") || normalized.includes("brick") || normalized.includes("cement") || normalized.includes("construct") || normalized.includes("civil")) {
+    return {
+      bg: "bg-rose-50/90",
+      text: "text-rose-950",
+      border: "border-rose-200",
+      badge: "bg-rose-100 text-rose-800",
+      iconColor: "text-rose-600",
+      dotColor: "bg-rose-500",
+      iconName: "Construction"
+    };
+  }
+
+  if (normalized.includes("clean") || normalized.includes("wash") || normalized.includes("housekeep") || normalized.includes("sanit")) {
+    return {
+      bg: "bg-cyan-50/90",
+      text: "text-cyan-950",
+      border: "border-cyan-200",
+      badge: "bg-cyan-100 text-cyan-800",
+      iconColor: "text-cyan-600",
+      dotColor: "bg-cyan-500",
+      iconName: "Sparkles"
+    };
+  }
+
+  // Dynamic fallback palette for custom artisan specialties
+  const fallbacks: SkillTheme[] = [
+    {
+      bg: "bg-indigo-50/90",
+      text: "text-indigo-950",
+      border: "border-indigo-200",
+      badge: "bg-indigo-100 text-indigo-800",
+      iconColor: "text-indigo-600",
+      dotColor: "bg-indigo-500",
+      iconName: "Sparkles"
+    },
+    {
+      bg: "bg-fuchsia-50/90",
+      text: "text-fuchsia-950",
+      border: "border-fuchsia-200",
+      badge: "bg-fuchsia-100 text-fuchsia-800",
+      iconColor: "text-fuchsia-600",
+      dotColor: "bg-fuchsia-500",
+      iconName: "Sparkles"
+    },
+    {
+      bg: "bg-blue-50/90",
+      text: "text-blue-950",
+      border: "border-blue-200",
+      badge: "bg-blue-100 text-blue-800",
+      iconColor: "text-blue-600",
+      dotColor: "bg-blue-500",
+      iconName: "Wrench"
+    },
+    {
+      bg: "bg-lime-50/90",
+      text: "text-lime-950",
+      border: "border-lime-200",
+      badge: "bg-lime-100 text-lime-900",
+      iconColor: "text-lime-600",
+      dotColor: "bg-lime-500",
+      iconName: "Wrench"
+    }
+  ];
+
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    hash = (hash << 5) - hash + normalized.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % fallbacks.length;
+  return fallbacks[index];
+}
+

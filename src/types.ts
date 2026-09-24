@@ -12,8 +12,11 @@ export interface WorkerProfile {
   latitude: number;
   longitude: number;
   isAvailable: boolean;
+  unavailableDates?: string[]; // ISO date strings (YYYY-MM-DD) when the worker is marked unavailable
+  skillProficiencies?: Record<string, number>; // Self-assessed proficiency scores (0-100) across trade skills
   photo: string; // Base64 or Unsplash Preset URL
-  gallery: string[]; // Up to 3 work photos (Base64 or Unsplash Presets)
+  imageUrls: string[]; // URLs of past work samples displayed in worker profile grid
+  gallery?: string[]; // Backwards-compatibility with legacy gallery photos
   experience: number; // Years
   about: string;
   createdAt: any; // Firestore Timestamp
@@ -28,6 +31,29 @@ export interface WorkerReview {
   rating: number; // 1 to 5
   comment: string;
   createdAt: any; // Firestore Timestamp
+}
+
+export interface WorkerInquiry {
+  id?: string;
+  workerId: string;
+  customerName: string;
+  customerPhone?: string;
+  message: string;
+  read?: boolean;
+  createdAt: any; // Firestore Timestamp
+}
+
+export interface WorkerNotification {
+  id: string;
+  type: "inquiry" | "review";
+  title: string;
+  message: string;
+  authorName?: string;
+  customerPhone?: string;
+  rating?: number;
+  read: boolean;
+  createdAt: any;
+  targetId?: string;
 }
 
 export interface CustomerLocation {
