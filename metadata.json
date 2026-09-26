@@ -1,6 +1,6 @@
 {
   "name": "Namma-Kelsa",
-  "description": "A dignity-first digital directory and marketplace for daily wage skilled laborers to list their portfolios and update their availability in real time.",
+  "description": "Namma Kelasa is an independent platform connecting skilled workers with customers across India. Direct hire, fair wages, zero commission.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

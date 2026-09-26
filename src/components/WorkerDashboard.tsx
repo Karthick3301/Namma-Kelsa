@@ -297,8 +297,8 @@ export default function WorkerDashboard({
                   {profile?.name || workerName || "Artisan Dashboard"}
                 </h2>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                  Verified Worker
+                  <Briefcase className="w-3 h-3 text-emerald-400" />
+                  Active Artisan
                 </span>
               </div>
               <p className="text-xs text-emerald-200/80 mt-1 flex items-center gap-2 flex-wrap">
@@ -339,8 +339,7 @@ export default function WorkerDashboard({
               {totalCompletedJobs}
             </span>
             <span className="text-xs font-semibold text-emerald-600 flex items-center gap-0.5">
-              <CheckCircle2 className="w-3 h-3" />
-              Verified Gigs
+              Completed Gigs
             </span>
           </div>
           <p className="text-[11px] text-slate-500 mt-2">
@@ -659,7 +658,7 @@ export default function WorkerDashboard({
             </span>
           </div>
           <span className="font-mono text-slate-400">
-            {language === "kn" ? "ಅಂಕಿಅಂಶಗಳು ನೈಜ ಸಮಯದೊಂದಿಗೆ ಹೊಂದಿಕೆಯಾಗುತ್ತವೆ" : "Synced with verified gig log"}
+            {language === "kn" ? "ಅಂಕಿಅಂಶಗಳು ನೈಜ ಸಮಯದೊಂದಿಗೆ ಹೊಂದಿಕೆಯಾಗುತ್ತವೆ" : "Synced with real-time bookings"}
           </span>
         </div>
       </div>
@@ -746,9 +745,9 @@ export default function WorkerDashboard({
             </div>
 
             <div className="mt-4 p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-100 flex items-start gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <p className="text-xs text-slate-600 leading-relaxed">
-                <strong>Reputation Tip:</strong> Customer reviews on Namma-Kelsa are permanent and verified. Completing jobs promptly and asking customers to submit direct feedback on your WorkerCard directly boosts your listing rank in your town center!
+                <strong>Reputation Tip:</strong> Customer reviews on Namma Kelasa come directly from real clients who booked your services. Completing jobs promptly and asking customers to submit direct feedback on your WorkerCard directly boosts your listing rank in your city!
               </p>
             </div>
           </div>
@@ -822,7 +821,7 @@ export default function WorkerDashboard({
             </div>
             <h4 className="font-bold text-slate-800 text-sm">No Customer Feedback Yet</h4>
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-              When customers hire you and rate your work on your WorkerCard, their verified review text, star score, and timestamp will immediately appear in this dashboard.
+              When customers hire you and rate your work on your WorkerCard, their review text, star score, and timestamp will immediately appear in this dashboard.
             </p>
           </div>
         ) : (
@@ -870,7 +869,7 @@ export default function WorkerDashboard({
 
                 <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
                   <span className="flex items-center gap-1 text-emerald-700 font-semibold">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Verified Customer Feedback
+                    Direct Customer Feedback
                   </span>
                   <span>ID: {rev.id?.slice(0, 6)}...</span>
                 </div>

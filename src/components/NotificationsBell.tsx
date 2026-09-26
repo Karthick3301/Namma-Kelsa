@@ -88,11 +88,11 @@ export const NotificationsBell: React.FC<NotificationsBellProps> = ({
       {
         id: `demo-welcome-${workerUid}`,
         type: "inquiry",
-        title: language === "kn" ? "ನಮ್ಮ ಕೆಲಸ ವೇದಿಕೆಗೆ ಸ್ವಾಗತ!" : "Welcome to Namma-Kelsa Directory!",
+        title: language === "kn" ? "ನಮ್ಮ ಕೆಲಸ ವೇದಿಕೆಗೆ ಸ್ವಾಗತ!" : "Welcome to Namma Kelasa!",
         message: language === "kn" 
-          ? "ನಿಮ್ಮ ಪರಿಶೀಲಿತ ಪ್ರೊಫೈಲ್ ಈಗ ಸಕ್ರಿಯವಾಗಿದೆ. ಗ್ರಾಹಕರು ಕರೆ ಮಾಡಿದಾಗ ಅಥವಾ ಸಂದೇಶ ಕಳುಹಿಸಿದಾಗ ಇಲ್ಲಿ ಕಾಣಿಸುತ್ತದೆ."
-          : "Your verified profile is active. You will receive live alerts here when customers send inquiries or write reviews.",
-        authorName: "Namma-Kelsa Admin",
+          ? "ನಿಮ್ಮ ಕೆಲಸಗಾರ ಪ್ರೊಫೈಲ್ ಈಗ ಸಕ್ರಿಯವಾಗಿದೆ. ಗ್ರಾಹಕರು ಕರೆ ಮಾಡಿದಾಗ ಅಥವಾ ಸಂದೇಶ ಕಳುಹಿಸಿದಾಗ ಇಲ್ಲಿ ಕಾಣಿಸುತ್ತದೆ."
+          : "Your artisan profile is active. You will receive live alerts here when customers send inquiries or write reviews.",
+        authorName: "Namma Kelasa Team",
         read: readIds.has(`demo-welcome-${workerUid}`),
         createdAt: new Date(Date.now() - 3600000).toISOString()
       },
@@ -102,7 +102,7 @@ export const NotificationsBell: React.FC<NotificationsBellProps> = ({
         title: language === "kn" ? "ಹೊಸ ಕೆಲಸದ ವಿಚಾರಣೆ" : "Customer Work Inquiry",
         message: language === "kn" 
           ? "ನಮಸ್ಕಾರ, ನಮಗೆ ಮುಂದಿನ ಶನಿವಾರ 2 ದಿನಗಳ ಕೆಲಸಕ್ಕೆ ನಿಮ್ಮ ಸೇವೆ ಲಭ್ಯವಿದೆಯೇ?"
-          : "Hello, looking for availability for house maintenance work this weekend in Bengaluru.",
+          : "Hello, looking for availability for house maintenance work this weekend in your area.",
         authorName: "Ramesh Kumar (Customer)",
         customerPhone: "+91 98450 12345",
         read: readIds.has(`demo-sample-inquiry-${workerUid}`),
@@ -128,8 +128,8 @@ export const NotificationsBell: React.FC<NotificationsBellProps> = ({
             title: language === "kn" 
               ? `${data.authorName || "ಗ್ರಾಹಕರು"} ರವರಿಂದ ಹೊಸ ${data.rating || 5}★ ವಿಮರ್ಶೆ` 
               : `New ${data.rating || 5}★ Review from ${data.authorName || "Customer"}`,
-            message: data.comment || "Left a verified rating on your work quality.",
-            authorName: data.authorName || "Verified Customer",
+            message: data.comment || "Left a rating on your work quality.",
+            authorName: data.authorName || "Customer",
             rating: Number(data.rating) || 5,
             read: currentRead.has(notifId),
             createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),

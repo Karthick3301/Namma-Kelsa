@@ -5,26 +5,94 @@
 import { WorkerProfile } from "./types";
 
 /**
- * Calculates the distance between two points on the Earth's surface (Haversine formula).
+ * Calculates the real-world distance between two geographic coordinates in kilometers (Haversine formula).
+ * Handles null, undefined, NaN, and out-of-range coordinates gracefully.
  */
 export function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
+  lat1: number | string | undefined | null,
+  lon1: number | string | undefined | null,
+  lat2: number | string | undefined | null,
+  lon2: number | string | undefined | null
 ): number {
+  if (
+    lat1 === undefined || lat1 === null ||
+    lon1 === undefined || lon1 === null ||
+    lat2 === undefined || lat2 === null ||
+    lon2 === undefined || lon2 === null
+  ) {
+    return 99999;
+  }
+
+  const nLat1 = typeof lat1 === "number" ? lat1 : parseFloat(String(lat1));
+  const nLon1 = typeof lon1 === "number" ? lon1 : parseFloat(String(lon1));
+  const nLat2 = typeof lat2 === "number" ? lat2 : parseFloat(String(lat2));
+  const nLon2 = typeof lon2 === "number" ? lon2 : parseFloat(String(lon2));
+
+  if (isNaN(nLat1) || isNaN(nLon1) || isNaN(nLat2) || isNaN(nLon2)) {
+    return 99999;
+  }
+
+  // Coordinate boundary checks (-90 to 90 lat, -180 to 180 lon)
+  if (nLat1 < -90 || nLat1 > 90 || nLat2 < -90 || nLat2 > 90 ||
+      nLon1 < -180 || nLon1 > 180 || nLon2 < -180 || nLon2 > 180) {
+    return 99999;
+  }
+
   const R = 6371; // Earth's radius in kilometers
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const dLat = ((nLat2 - nLat1) * Math.PI) / 180;
+  const dLon = ((nLon2 - nLon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
+    Math.cos((nLat1 * Math.PI) / 180) *
+      Math.cos((nLat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const d = R * c;
   return Number(d.toFixed(1)); // return distance formatted to 1 decimal place
+}
+
+/**
+ * Returns a human-friendly formatted distance string.
+ */
+export function formatDistance(km: number | undefined | null): string {
+  if (km === undefined || km === null || isNaN(km) || km >= 9999) {
+    return "Location pending";
+  }
+  if (km < 0.1) {
+    return "< 100 m";
+  }
+  if (km < 1) {
+    return `${Math.round(km * 1000)} m`;
+  }
+  if (km < 10) {
+    return `${km.toFixed(1)} km`;
+  }
+  return `${Math.round(km)} km`;
+}
+
+/**
+ * Detects whether the current device is a mobile device using
+ * navigator.userAgentData, userAgent regex, and screen width/touch heuristics.
+ */
+export function isMobileDevice(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+  // 1. Modern Chromium Client Hints API
+  if ((navigator as any).userAgentData?.mobile !== undefined) {
+    return Boolean((navigator as any).userAgentData.mobile);
+  }
+  // 2. Comprehensive User-Agent mobile regex check
+  const ua = navigator.userAgent || navigator.vendor || (window as any).opera || "";
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(ua);
+  if (isMobileUA) {
+    return true;
+  }
+  // 3. Screen width and touch capability fallback (e.g. tablet or mobile viewport)
+  const hasTouch = "ontouchstart" in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+  const isSmallScreen = window.innerWidth <= 768;
+  return Boolean(hasTouch && isSmallScreen);
 }
 
 /**
@@ -151,9 +219,9 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     phone: "9876543210",
     skills: ["Painting", "Tiling"],
     dailyRate: 650,
-    locationName: "Nelamangala Hub",
-    latitude: 13.0980,
-    longitude: 77.3940,
+    locationName: "Kolkata, West Bengal",
+    latitude: 22.5726,
+    longitude: 88.3639,
     isAvailable: true,
     photo: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
@@ -167,7 +235,7 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
       "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300"
     ],
     experience: 8,
-    about: "Expert painter with excellent speed and 8+ years executing high quality clean wall coats. Dedicated to clean, durable construction work."
+    about: "Expert painter and tiler with excellent speed and 8+ years executing high quality clean finishes. Dedicated to durable residential and commercial work."
   },
   {
     uid: "mock-worker-2",
@@ -175,9 +243,9 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     phone: "9123456780",
     skills: ["Plumbing", "Electrical"],
     dailyRate: 700,
-    locationName: "Town Center (Kengeri)",
-    latitude: 12.9200,
-    longitude: 77.4850,
+    locationName: "Mumbai, Maharashtra",
+    latitude: 19.0760,
+    longitude: 72.8777,
     isAvailable: true,
     photo: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
@@ -191,18 +259,18 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
       "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=300"
     ],
     experience: 5,
-    about: "Certified home electrician & skilled water line plumber. Focused on solving leaks and wire shorts efficiently with local guarantees."
+    about: "Certified home electrician & skilled water line plumber. Focused on solving leaks and wire shorts efficiently with honest upfront estimates."
   },
   {
     uid: "mock-worker-3",
-    name: "Devappa K.",
+    name: "Devappa Sharma",
     phone: "9988776655",
-    skills: ["Gardening"],
+    skills: ["Gardening", "Masonry"],
     dailyRate: 500,
-    locationName: "Jayanagar Sector",
-    latitude: 12.9240,
-    longitude: 77.5910,
-    isAvailable: false,
+    locationName: "Delhi NCR",
+    latitude: 28.6139,
+    longitude: 77.2090,
+    isAvailable: true,
     photo: "https://images.unsplash.com/photo-1592417817098-8f3d6fe19665?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
       "https://images.unsplash.com/photo-1558904541-efa8c1a68fc6?auto=format&fit=crop&q=80&w=600",
@@ -215,7 +283,130 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
       "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=300"
     ],
     experience: 12,
-    about: "Passionate community gardener offering complete organic lawn care, trimming, and flower design. Crafting beautiful garden layouts."
+    about: "Passionate community gardener and stone mason offering complete lawn care, flower beds, and sturdy boundary wall plastering."
+  },
+  {
+    uid: "mock-worker-4",
+    name: "Suresh Kumar",
+    phone: "9841234567",
+    skills: ["Carpentry", "Tiling"],
+    dailyRate: 680,
+    locationName: "Chennai, Tamil Nadu",
+    latitude: 13.0827,
+    longitude: 80.2707,
+    isAvailable: true,
+    photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
+    imageUrls: [
+      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600",
+      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600"
+    ],
+    gallery: [
+      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300",
+      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=300"
+    ],
+    experience: 9,
+    about: "Master carpenter specializing in modular kitchen woodwork, wooden door fittings, and precise tile alignment."
+  },
+  {
+    uid: "mock-worker-5",
+    name: "Rajesh Varma",
+    phone: "9701234567",
+    skills: ["Electrical", "Plumbing"],
+    dailyRate: 720,
+    locationName: "Hyderabad, Telangana",
+    latitude: 17.3850,
+    longitude: 78.4867,
+    isAvailable: true,
+    photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150",
+    imageUrls: [
+      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600",
+      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600"
+    ],
+    gallery: [
+      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=300"
+    ],
+    experience: 7,
+    about: "Experienced technician handling residential electric wiring, MCB switches, and overhead tank water pump installations."
+  },
+  {
+    uid: "mock-worker-6",
+    name: "Pooja Deshmukh",
+    phone: "9823456789",
+    skills: ["Cleaning", "Gardening"],
+    dailyRate: 550,
+    locationName: "Pune, Maharashtra",
+    latitude: 18.5204,
+    longitude: 73.8567,
+    isAvailable: true,
+    photo: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150",
+    imageUrls: [
+      "https://images.unsplash.com/photo-1558904541-efa8c1a68fc6?auto=format&fit=crop&q=80&w=600"
+    ],
+    gallery: [
+      "https://images.unsplash.com/photo-1558904541-efa8c1a68fc6?auto=format&fit=crop&q=80&w=300"
+    ],
+    experience: 6,
+    about: "Deep cleaning professional and home gardening specialist. Experienced in post-renovation cleanup, terrace gardens, and organic pest care."
+  },
+  {
+    uid: "mock-worker-7",
+    name: "Vikram Rathore",
+    phone: "9829012345",
+    skills: ["Masonry", "Painting"],
+    dailyRate: 640,
+    locationName: "Jaipur, Rajasthan",
+    latitude: 26.9124,
+    longitude: 75.7873,
+    isAvailable: true,
+    photo: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150",
+    imageUrls: [
+      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600"
+    ],
+    gallery: [
+      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=300"
+    ],
+    experience: 11,
+    about: "Traditional and modern masonry artisan with expertise in brick masonry, plastering, stone elevation, and waterproof painting."
+  },
+  {
+    uid: "mock-worker-8",
+    name: "Mohammad Arif",
+    phone: "9919012345",
+    skills: ["Carpentry", "Electrical"],
+    dailyRate: 690,
+    locationName: "Lucknow, Uttar Pradesh",
+    latitude: 26.8467,
+    longitude: 80.9462,
+    isAvailable: true,
+    photo: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=150",
+    imageUrls: [
+      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600"
+    ],
+    gallery: [
+      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300"
+    ],
+    experience: 8,
+    about: "Specialist in fine furniture craft, false ceiling lighting, and concealed electrical conduit repairs."
+  },
+  {
+    uid: "mock-worker-9",
+    name: "K. Venkatesh Rao",
+    phone: "9848012345",
+    skills: ["Plumbing", "Electrical"],
+    dailyRate: 650,
+    locationName: "Vijayawada, Andhra Pradesh",
+    latitude: 16.5062,
+    longitude: 80.6480,
+    isAvailable: true,
+    photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
+    imageUrls: [
+      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600"
+    ],
+    gallery: [
+      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300"
+    ],
+    experience: 9,
+    about: "Master plumber and pump technician in Vijayawada. Expert in high-pressure piping, bathroom fittings, and residential electric motor wiring."
   }
 ];
 
@@ -306,6 +497,8 @@ const getOffsetDateISO = (offsetDays: number) => {
 MOCK_WORKERS[0].unavailableDates = [getOffsetDateISO(1), getOffsetDateISO(4)];
 MOCK_WORKERS[1].unavailableDates = [getOffsetDateISO(2)];
 MOCK_WORKERS[2].unavailableDates = [getOffsetDateISO(0), getOffsetDateISO(1)];
+if (MOCK_WORKERS[3]) MOCK_WORKERS[3].unavailableDates = [getOffsetDateISO(3)];
+if (MOCK_WORKERS[4]) MOCK_WORKERS[4].unavailableDates = [getOffsetDateISO(1), getOffsetDateISO(5)];
 
 export interface SkillTheme {
   bg: string;
@@ -467,5 +660,244 @@ export function getSkillTheme(skillName: string): SkillTheme {
   }
   const index = Math.abs(hash) % fallbacks.length;
   return fallbacks[index];
+}
+
+/**
+ * Cleans a place component by removing administrative suffixes and whitespace.
+ * e.g. "Tirupattur District" -> "Tirupattur", "Kanuru Mandal" -> "Kanuru"
+ */
+export function cleanPlaceComponent(component: string | undefined | null): string {
+  if (!component) return "";
+  let clean = String(component).trim();
+  // Strip postal codes (5-6 digits) & country name
+  clean = clean.replace(/\b(India|\d{5,6})\b/gi, "").trim();
+  // Strip administrative suffixes
+  clean = clean.replace(/\s+(District|Dist\.?|Dt\.?|Taluk|Taluka|Tq\.?|Mandal|Tehsil|Tahsil|Block|Subdistrict|Division|Circle|Corporation|Municipality|Urban|Rural)\b/gi, "").trim();
+  clean = clean.replace(/^(District|Taluk|Mandal|Tehsil)\s+/gi, "").trim();
+  // Clean dangling commas, hyphens
+  return clean.replace(/^[,\s-]+|[,\s-]+$/g, "");
+}
+
+/**
+ * Computes Levenshtein distance between two strings.
+ */
+function getLevenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = i;
+    for (let j = 1; j <= b.length; j++) {
+      const val = a[i - 1] === b[j - 1] ? row[j - 1] : Math.min(row[j - 1], prev, row[j]) + 1;
+      row[j - 1] = prev;
+      prev = val;
+    }
+    row[b.length] = prev;
+  }
+  return row[b.length];
+}
+
+/**
+ * Normalizes a place name for phonetic & transliteration equivalence in India.
+ * Handles common Indian English variations (e.g. th vs t, double consonants, etc.)
+ */
+export function normalizePlaceForComparison(name: string): string {
+  if (!name) return "";
+  let s = cleanPlaceComponent(name).toLowerCase();
+  // Strip non-alphanumeric
+  s = s.replace(/[^a-z0-9]/g, "");
+  // Common transliteration variations in Indian English
+  s = s.replace(/th/g, "t");
+  s = s.replace(/ph/g, "p");
+  s = s.replace(/dh/g, "d");
+  s = s.replace(/bh/g, "b");
+  s = s.replace(/gh/g, "g");
+  s = s.replace(/kh/g, "k");
+  s = s.replace(/zh/g, "l");
+  s = s.replace(/sh/g, "s");
+  // Collapse double letters (pp -> p, tt -> t, ll -> l, rr -> r, etc.)
+  s = s.replace(/([a-z])\1+/g, "$1");
+  return s.trim();
+}
+
+/**
+ * Checks if two location names are identical or near-identical phonetic/spelling variants.
+ * e.g., "Tirupathur" and "Tirupattur" -> true
+ * e.g., "Bengaluru" and "Bangalore" -> true
+ * e.g., "Patchur" and "Tirupattur" -> false
+ * e.g., "Tiruppur" and "Tirupattur" -> false (distinct towns!)
+ */
+export function areNearDuplicateStrings(strA: string | undefined | null, strB: string | undefined | null): boolean {
+  if (!strA || !strB) return false;
+  const aRaw = cleanPlaceComponent(strA).toLowerCase();
+  const bRaw = cleanPlaceComponent(strB).toLowerCase();
+  if (!aRaw || !bRaw) return false;
+  if (aRaw === bRaw) return true;
+
+  const a = normalizePlaceForComparison(strA);
+  const b = normalizePlaceForComparison(strB);
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  // Substring containment if base length is substantial (e.g. "bengaluru" and "bengaluruurban")
+  if (a.length >= 5 && b.length >= 5) {
+    if (a.includes(b) || b.includes(a)) {
+      return true;
+    }
+  }
+
+  // Exact 1-character difference for longer words (e.g. 7+ chars)
+  const maxLen = Math.max(a.length, b.length);
+  const dist = getLevenshteinDistance(a, b);
+  if (maxLen >= 7 && dist <= 1) {
+    return true;
+  }
+
+  // Known historical & bilingual Indian city aliases
+  const knownAliases: [string, string][] = [
+    ["bangalore", "bengaluru"],
+    ["mysore", "mysuru"],
+    ["belgaum", "belagavi"],
+    ["mangalore", "mangaluru"],
+    ["hubli", "hubballi"],
+    ["gulbarga", "kalaburagi"],
+    ["bellary", "ballari"],
+    ["shimoga", "shivamogga"],
+    ["bijapur", "vijayapura"],
+    ["chikmagalur", "chikkamagaluru"],
+    ["madras", "chennai"],
+    ["trivandrum", "thiruvananthapuram"],
+    ["calicut", "kozhikode"],
+    ["cochin", "kochi"],
+    ["poona", "pune"],
+    ["bombay", "mumbai"],
+    ["calcutta", "kolkata"],
+    ["orissa", "odisha"],
+    ["gurgaon", "gurugram"],
+    ["waltair", "visakhapatnam"],
+    ["vizag", "visakhapatnam"],
+    ["tirupathur", "tirupattur"],
+    ["thiruppathur", "tirupattur"],
+    ["tiruppathur", "tirupathur"]
+  ];
+
+  for (const [x, y] of knownAliases) {
+    if ((a === x && b === y) || (a === y && b === x)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Formats reverse-geocoded location data from Nominatim into a concise, readable 2-level string:
+ * - De-duplicates redundant administrative components (e.g., "Tirupathur, Tirupattur" -> "Tirupattur")
+ * - Prioritizes the most locally recognizable name first (Village or Town)
+ * - Only includes the District if it is meaningfully different from the town name; otherwise falls back to State
+ * - Never returns redundant 3+ level chains like "Patchur, Tirupathur, Tirupattur"
+ * Output is ideally: "Town/Village, District" or "Town/Village, State"
+ */
+export function formatReverseGeocodedLocation(address: any, displayName?: string): string {
+  const addr = address || {};
+
+  // Extract raw components
+  const villageRaw = addr.village || addr.hamlet || "";
+  const suburbRaw = addr.suburb || addr.neighbourhood || addr.residential || addr.quarter || addr.city_district || addr.road || "";
+  const townRaw = addr.town || addr.city || addr.municipality || "";
+  const districtRaw = addr.state_district || addr.district || addr.county || "";
+  const stateRaw = addr.state || "";
+
+  const village = cleanPlaceComponent(villageRaw);
+  const suburb = cleanPlaceComponent(suburbRaw);
+  const town = cleanPlaceComponent(townRaw);
+  const district = cleanPlaceComponent(districtRaw);
+  const state = cleanPlaceComponent(stateRaw);
+
+  // 1. Determine most locally recognizable entity (Level 1)
+  // Priority: Village -> Suburb -> Town -> District
+  let level1 = village || suburb || town || district;
+  if (!village && !suburb && town && district && areNearDuplicateStrings(town, district)) {
+    level1 = district; // prefer formal district name when town and district are identical/phonetic variants
+  }
+
+  // 2. Identify town and district, de-duplicating if they are near-identical variants
+  // e.g. town="Tirupathur", district="Tirupattur" -> consolidated to "Tirupattur"
+  let consolidatedHub = town || district;
+  if (town && district) {
+    if (areNearDuplicateStrings(town, district)) {
+      consolidatedHub = district; // prefer formal district name
+    } else {
+      consolidatedHub = town;
+    }
+  }
+
+  // 3. Determine Level 2:
+  // - If level1 is a village/suburb:
+  //   - If consolidatedHub exists and is NOT a duplicate of level1, use consolidatedHub (e.g. "Patchur, Tirupattur")
+  //   - Otherwise, use state (e.g. "Patchur, Tamil Nadu")
+  // - If level1 is a Town/City:
+  //   - Only include district if district is meaningfully different from town
+  //     e.g. town="Thiruppathur", district="Sivaganga" -> "Thiruppathur, Sivaganga"
+  //     e.g. town="Aluva", district="Ernakulam" -> "Aluva, Ernakulam"
+  //     e.g. town="Tirupathur", district="Tirupattur" -> duplicate! so use state -> "Tirupattur, Tamil Nadu"
+  //     e.g. town="Jaipur", district="Jaipur" -> duplicate! so use state -> "Jaipur, Rajasthan"
+  let level2 = "";
+
+  const isLevel1LocalVillageOrSuburb = Boolean((village || suburb) && level1 !== town && level1 !== district);
+
+  if (isLevel1LocalVillageOrSuburb) {
+    if (consolidatedHub && !areNearDuplicateStrings(level1, consolidatedHub)) {
+      level2 = consolidatedHub;
+    } else if (state && !areNearDuplicateStrings(level1, state)) {
+      level2 = state;
+    }
+  } else {
+    // Level 1 is the town itself
+    if (district && town && !areNearDuplicateStrings(town, district) && !areNearDuplicateStrings(level1, district)) {
+      level2 = district;
+    } else if (state && !areNearDuplicateStrings(level1, state)) {
+      level2 = state;
+    }
+  }
+
+  if (level1 && level2) {
+    return `${level1}, ${level2}`;
+  }
+  if (level1 && state && !areNearDuplicateStrings(level1, state)) {
+    return `${level1}, ${state}`;
+  }
+  if (level1) {
+    return level1;
+  }
+
+  // Fallback: parse displayName if address object is empty or sparse
+  if (displayName) {
+    const rawTokens = displayName
+      .split(",")
+      .map(part => cleanPlaceComponent(part))
+      .filter(part => {
+        if (!part) return false;
+        if (/^(india|\d{5,6})$/i.test(part)) return false;
+        return true;
+      });
+
+    // De-duplicate near-identical tokens across the list
+    const uniqueTokens: string[] = [];
+    for (const token of rawTokens) {
+      const isDupe = uniqueTokens.some(existing => areNearDuplicateStrings(existing, token));
+      if (!isDupe) {
+        uniqueTokens.push(token);
+      }
+    }
+
+    if (uniqueTokens.length >= 2) {
+      return `${uniqueTokens[0]}, ${uniqueTokens[1]}`;
+    } else if (uniqueTokens.length === 1) {
+      return uniqueTokens[0];
+    }
+  }
+
+  return "Current Location";
 }
 

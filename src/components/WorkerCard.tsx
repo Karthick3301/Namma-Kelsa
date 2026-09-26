@@ -47,7 +47,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { WorkerProfile, WorkerReview } from "../types";
 import { downloadWorkerProfilePdf } from "../utils/pdfGenerator";
-import { formatDateToISO, getUpcomingDays, formatDisplayDate, getSkillTheme } from "../utils";
+import { formatDateToISO, getUpcomingDays, formatDisplayDate, getSkillTheme, isMobileDevice } from "../utils";
 import MiniMap from "./MiniMap";
 import SkillRadarChart from "./SkillRadarChart";
 import { useLanguage } from "../context/LanguageContext";
@@ -186,9 +186,55 @@ export default function WorkerCard({
   // WhatsApp Direct Message and customer inquiry states
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [isCopiedWhatsApp, setIsCopiedWhatsApp] = useState(false);
+
+  // Desktop Call Modal & Copy State
+  const [showDesktopCallModal, setShowDesktopCallModal] = useState(false);
+  const [isPhoneCopied, setIsPhoneCopied] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean>(() => isMobileDevice());
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(isMobileDevice());
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const formatDisplayPhone = (rawPhone: string): string => {
+    const cleaned = (rawPhone || "").trim();
+    const digits = cleaned.replace(/\D/g, "");
+    if (digits.length === 10) {
+      return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+    }
+    return cleaned;
+  };
+
+  const handleCopyPhoneNumber = async () => {
+    const phoneToCopy = worker.phone.trim();
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(phoneToCopy);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = phoneToCopy;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setIsPhoneCopied(true);
+      setTimeout(() => setIsPhoneCopied(false), 2500);
+    } catch {
+      setIsPhoneCopied(true);
+      setTimeout(() => setIsPhoneCopied(false), 2500);
+    }
+  };
   const defaultInquiryText = language === "kn"
     ? `ನನಗೆ ${worker.skills[0] || "ಕೆಲಸ"}ಕ್ಕೆ ಸಂಬಂಧಿಸಿದಂತೆ ನಿಮ್ಮ ಸೇವೆ ಬೇಕಾಗಿದೆ. ನೀವು ಲಭ್ಯವಿದ್ದೀರಾ?`
-    : `I would like to inquire about your availability for ${worker.skills[0] || "trade"} work in ${customerTownName || worker.locationName || "Bengaluru"}.`;
+    : `I would like to inquire about your availability for ${worker.skills[0] || "trade"} work in ${customerTownName || worker.locationName || "your area"}.`;
   const [customerInquiry, setCustomerInquiry] = useState<string>(defaultInquiryText);
   const [selectedInquiryPreset, setSelectedInquiryPreset] = useState<string>("availability");
 
@@ -204,13 +250,13 @@ export default function WorkerCard({
   // Construct structured pre-filled message template including worker name and customer inquiry
   const constructWhatsAppMessage = (inquiryText: string): string => {
     const primarySkill = worker.skills[0] || "artisan";
-    const location = customerTownName || worker.locationName || "Bengaluru";
+    const location = customerTownName || worker.locationName || "your area";
     const cleanInquiry = (inquiryText || "").trim() || `I would like to inquire about your availability for ${primarySkill} work.`;
 
     if (language === "kn") {
       return (
         `ನಮಸ್ಕಾರ ${worker.name},\n\n` +
-        `ನಾನು ನಮ್ಮ ಕೆಲಸ (Namma-Kelsa) ವೇದಿಕೆಯಲ್ಲಿ ನಿಮ್ಮ ಪರಿಶೀಲಿತ ಕೆಲಸಗಾರ ಪ್ರೊಫೈಲ್ ನೋಡಿದ್ದೇನೆ.\n\n` +
+        `ನಾನು ನಮ್ಮ ಕೆಲಸ (Namma Kelasa) ವೇದಿಕೆಯಲ್ಲಿ ನಿಮ್ಮ ಕೆಲಸಗಾರ ಪ್ರೊಫೈಲ್ ನೋಡಿದ್ದೇನೆ.\n\n` +
         `📋 ಗ್ರಾಹಕರ ವಿಚಾರಣೆ (Customer Inquiry):\n"${cleanInquiry}"\n\n` +
         `📍 ಸ್ಥಳ: ${location}\n` +
         `🛠 ಕೌಶಲ್ಯ: ${worker.skills.join(", ")}\n` +
@@ -221,7 +267,7 @@ export default function WorkerCard({
 
     return (
       `Hello ${worker.name},\n\n` +
-      `I found your verified profile on Namma-Kelsa.\n\n` +
+      `I found your profile on Namma Kelasa.\n\n` +
       `📋 Customer Inquiry:\n"${cleanInquiry}"\n\n` +
       `📍 Location: ${location}\n` +
       `🛠 Trade Skills: ${worker.skills.join(", ")}\n` +
@@ -261,8 +307,8 @@ export default function WorkerCard({
     setShowWhatsAppModal(false);
     try {
       const activeUser = auth.currentUser;
-      const customerName = activeUser?.displayName || "Verified Customer";
-      const cleanMsg = (customerInquiry || "").trim() || `Inquiry for ${worker.skills[0] || "work"} in ${customerTownName || worker.locationName || "Bengaluru"}`;
+      const customerName = activeUser?.displayName || "Direct Customer";
+      const cleanMsg = (customerInquiry || "").trim() || `Inquiry for ${worker.skills[0] || "work"} in ${customerTownName || worker.locationName || "your area"}`;
 
       const inquiryData = {
         workerId: worker.uid,
@@ -288,7 +334,7 @@ export default function WorkerCard({
       window.dispatchEvent(new CustomEvent("namma-kelsa-new-inquiry", {
         detail: {
           workerId: worker.uid,
-          customerName: "Verified Customer",
+          customerName: "Direct Customer",
           message: customerInquiry.trim(),
           createdAt: new Date().toISOString()
         }
@@ -303,7 +349,7 @@ export default function WorkerCard({
       label: language === "kn" ? "ಲಭ್ಯತೆ ವಿಚಾರಣೆ" : "Availability Inquiry",
       text: language === "kn"
         ? `ನನಗೆ ${worker.skills[0] || "ಕೆಲಸ"}ಕ್ಕೆ ನಿಮ್ಮ ನೆರವು ಬೇಕಾಗಿದೆ. ಮುಂಬರುವ ದಿನಗಳಲ್ಲಿ ನೀವು ಲಭ್ಯವಿದ್ದೀರಾ?`
-        : `I would like to inquire about your availability for ${worker.skills[0] || "trade"} work in ${customerTownName || worker.locationName || "Bengaluru"}.`
+        : `I would like to inquire about your availability for ${worker.skills[0] || "trade"} work in ${customerTownName || worker.locationName || "your area"}.`
     },
     {
       id: "quote",
@@ -403,8 +449,8 @@ export default function WorkerCard({
     if (typeof navigator !== "undefined" && typeof (navigator as any).share === "function") {
       try {
         await (navigator as any).share({
-          title: `${worker.name} - Verified Artisan on Namma-Kelsa`,
-          text: `Check out ${worker.name}'s verified profile on Namma-Kelsa: ${worker.skills.join(", ")} - ₹${worker.dailyRate}/day`,
+          title: `${worker.name} - Skilled Artisan on Namma Kelasa`,
+          text: `Check out ${worker.name}'s artisan profile on Namma Kelasa: ${worker.skills.join(", ")} - ₹${worker.dailyRate}/day`,
           url: shareUrl
         });
       } catch {
@@ -547,7 +593,7 @@ export default function WorkerCard({
 
     if (!activeUser) return;
 
-    const author = reviewerName.trim() || activeUser.displayName || "Verified Customer";
+    const author = reviewerName.trim() || activeUser.displayName || "Customer";
     const submittedRating = Math.max(1, Math.min(5, Math.round(Number(rating) || 5)));
     setSubmittingReview(true);
 
@@ -878,7 +924,9 @@ export default function WorkerCard({
               <MapPin className="w-3.5 h-3.5 text-emerald-650" />
               <span>{worker.locationName}</span>
               <span className="text-slate-300">•</span>
-              <span className="text-emerald-700 font-bold">{distance} {t("km")} {t("away")}</span>
+              <span className="text-emerald-700 font-bold">
+                {distance >= 9999 ? "Distance unavailable" : distance < 1 ? `< 1 ${t("km")} ${t("away")}` : `${distance} ${t("km")} ${t("away")}`}
+              </span>
             </p>
 
             {/* Daily rate badge, experience badge, and rating badge */}
@@ -1031,7 +1079,7 @@ export default function WorkerCard({
 
                 {/* Distance Overlay Pill inside map graphic */}
                 <div className="absolute bottom-1 right-1.5 bg-white/95 backdrop-blur-xs px-1.5 py-0.5 rounded text-[9px] font-mono font-black text-emerald-800 border border-emerald-200/80 shadow-2xs">
-                  {distance} km
+                  {distance >= 9999 ? "Pending" : distance < 1 ? "< 1 km" : `${distance} km`}
                 </div>
               </div>
             </ActionTooltip>
@@ -1047,20 +1095,30 @@ export default function WorkerCard({
 
                 <ActionTooltip label={t("tooltipDistance")} position="top">
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shrink-0 cursor-help ${
-                    distance <= 5 
-                      ? "bg-emerald-100/90 text-emerald-800" 
-                      : distance <= 15 
-                        ? "bg-sky-100/90 text-sky-800" 
-                        : "bg-amber-100/90 text-amber-850"
+                    distance >= 9999
+                      ? "bg-slate-100 text-slate-700"
+                      : distance <= 5 
+                        ? "bg-emerald-100/90 text-emerald-800" 
+                        : distance <= 25 
+                          ? "bg-sky-100/90 text-sky-800" 
+                          : "bg-amber-100/90 text-amber-850"
                   }`}>
-                    {distance <= 5 ? (
+                    {distance >= 9999 ? (
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                    ) : distance <= 5 ? (
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    ) : distance <= 15 ? (
+                    ) : distance <= 25 ? (
                       <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                     ) : (
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                     )}
-                    <span>{distance} {t("km")} {t("away")}</span>
+                    <span>
+                      {distance >= 9999 
+                        ? "Location pending" 
+                        : distance < 1 
+                          ? `< 1 ${t("km")} ${t("away")}` 
+                          : `${distance} ${t("km")} ${t("away")}`}
+                    </span>
                   </span>
                 </ActionTooltip>
               </div>
@@ -1069,7 +1127,7 @@ export default function WorkerCard({
               <p className="text-[11px] text-slate-500 truncate flex items-center gap-1">
                 <Navigation className="w-3 h-3 text-slate-400 shrink-0" />
                 <span>
-                  {customerTownName ? `${customerTownName} → ${worker.locationName} Hub` : `Bengaluru ${worker.locationName} Zone`}
+                  {customerTownName ? `${customerTownName} → ${worker.locationName} Hub` : `${worker.locationName || "Local"} Service Zone`}
                 </span>
               </p>
 
@@ -1427,7 +1485,7 @@ export default function WorkerCard({
                     <p className="text-[11px] text-emerald-200/90 mt-0.5 leading-snug">
                       {language === "kn" 
                         ? "ನಿಮ್ಮ ರೇಟಿಂಗ್ ಮತ್ತು ವಿಮರ್ಶೆ ಈಗ ಈ ಪ್ರೊಫೈಲ್‌ನಲ್ಲಿ ನೇರವಾಗಿ ಗೋಚರಿಸುತ್ತಿದೆ."
-                        : "Your verified rating and comment are now live on the worker's card for other customers."}
+                        : "Your rating and review are now live on the worker's card for other customers."}
                     </p>
                     
                     {/* Animated gold stars sequence */}
@@ -1639,7 +1697,7 @@ export default function WorkerCard({
                   <p className="text-xs text-slate-600 font-medium">
                     {language === "kn"
                       ? `${worker.name} ರವರಿಗೆ ಇನ್ನೂ ಯಾವುದೇ ವಿಮರ್ಶೆಗಳಿಲ್ಲ. ಕೆಲಸ ಪಡೆದಿದ್ದೀರಾ? ಮೊದಲ ವಿಮರ್ಶೆಯನ್ನು ನೀಡಿ!`
-                      : `No customer reviews yet for ${worker.name}. Hired this artisan recently? Be the first to leave a verified review!`}
+                      : `No customer reviews yet for ${worker.name}. Hired this artisan recently? Be the first to leave a review!`}
                   </p>
                   {!showFeedbackForm && (
                     <button
@@ -1656,7 +1714,7 @@ export default function WorkerCard({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
                     <span className="font-mono font-bold uppercase tracking-wider">
-                      {language === "kn" ? `ಇತ್ತೀಚಿನ ವಿಮರ್ಶೆಗಳು (${reviews.length})` : `Verified Customer Reviews (${reviews.length})`}
+                      {language === "kn" ? `ಇತ್ತೀಚಿನ ವಿಮರ್ಶೆಗಳು (${reviews.length})` : `Customer Reviews (${reviews.length})`}
                     </span>
                     <span className="font-semibold text-amber-800">
                       ★ {averageRating} {language === "kn" ? "ಸರಾಸರಿ" : "Average"}
@@ -1859,19 +1917,40 @@ export default function WorkerCard({
             </ActionTooltip>
           </div>
 
-          {/* Direct Call Button triggering 'tel:' link with worker phone number */}
-          <ActionTooltip label={t("tooltipDirectCall")} position="top">
-            <a 
-              id={`direct-call-button-${worker.uid}`}
-              data-testid="direct-call-button"
-              href={`tel:${worker.phone.trim()}`}
-              title={t("tooltipDirectCall")}
-              aria-label={t("tooltipDirectCall")}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2 px-3.5 rounded-xl text-xs font-black shadow-md shadow-emerald-700/20 tracking-wider hover:shadow-lg transition-all duration-200 uppercase group shrink-0"
-            >
-              <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
-              <span>{t("directCall")}</span>
-            </a>
+          {/* Direct Call Button: on mobile triggers native tel: link; on desktop opens contact modal with copy number */}
+          <ActionTooltip 
+            label={isMobile ? t("tooltipDirectCall") : (language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone & Call Worker")} 
+            position="top"
+          >
+            {isMobile ? (
+              <a 
+                id={`direct-call-button-${worker.uid}`}
+                data-testid="direct-call-button"
+                href={`tel:${worker.phone.trim()}`}
+                title={t("tooltipDirectCall")}
+                aria-label={t("tooltipDirectCall")}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2 px-3.5 rounded-xl text-xs font-black shadow-md shadow-emerald-700/20 tracking-wider hover:shadow-lg transition-all duration-200 uppercase group shrink-0"
+              >
+                <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+                <span>{t("directCall")}</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                id={`direct-call-button-${worker.uid}`}
+                data-testid="direct-call-button"
+                onClick={() => {
+                  setShowDesktopCallModal(true);
+                  setIsPhoneCopied(false);
+                }}
+                title={language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone Number & Call"}
+                aria-label={language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone Number & Call"}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2 px-3.5 rounded-xl text-xs font-black shadow-md shadow-emerald-700/20 tracking-wider hover:shadow-lg transition-all duration-200 uppercase group shrink-0 cursor-pointer"
+              >
+                <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+                <span>{t("directCall")}</span>
+              </button>
+            )}
           </ActionTooltip>
         </div>
       </div>
@@ -2023,6 +2102,145 @@ export default function WorkerCard({
         </div>
       )}
 
+      {/* Desktop Direct Call Modal */}
+      {showDesktopCallModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs"
+          onClick={() => setShowDesktopCallModal(false)}
+        >
+          <div 
+            className="relative max-w-md w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 p-5 sm:p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+            data-testid={`desktop-call-modal-${worker.uid}`}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                  <Phone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 leading-tight">
+                    {language === "kn" ? `${worker.name} ರವರಿಗೆ ಕರೆ ಮಾಡಿ` : `Call ${worker.name}`}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {language === "kn" ? "ನೇರ ಕೆಲಸಗಾರ ಸಂಪರ್ಕ ವಿವರ" : "Direct Artisan Contact Details"}
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowDesktopCallModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer"
+                title="Close"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Worker Identity Capsule */}
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+              <img 
+                src={worker.photo} 
+                alt={worker.name} 
+                className="w-12 h-12 rounded-xl object-cover border border-emerald-300 shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <h4 className="font-extrabold text-sm text-slate-900 truncate">{worker.name}</h4>
+                <p className="text-xs text-emerald-800 font-semibold truncate">{worker.skills.join(", ")}</p>
+                <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                  <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span className="truncate">{worker.locationName}</span>
+                  <span className="text-slate-300">•</span>
+                  <span className="font-bold text-emerald-700">₹{worker.dailyRate}/day</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Primary Action: Phone Number & Copy Box */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                {language === "kn" ? "ದೂರವಾಣಿ ಸಂಖ್ಯೆ (Phone Number):" : "Worker Phone Number:"}
+              </label>
+              
+              <div className="flex items-center justify-between p-3.5 bg-emerald-50/70 border-2 border-emerald-500/30 rounded-xl gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Phone className="w-5 h-5 text-emerald-700 shrink-0" />
+                  <span className="font-mono text-xl sm:text-2xl font-black text-slate-900 tracking-wider select-all truncate">
+                    {formatDisplayPhone(worker.phone)}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  id={`btn-copy-phone-${worker.uid}`}
+                  data-testid="copy-phone-number-button"
+                  onClick={handleCopyPhoneNumber}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer ${
+                    isPhoneCopied
+                      ? "bg-emerald-700 text-white"
+                      : "bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white"
+                  }`}
+                  title="Copy Phone Number"
+                >
+                  {isPhoneCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>{language === "kn" ? "ಕಾಪಿ ಮಾಡಲಾಗಿದೆ!" : "Copied!"}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{language === "kn" ? "ಸಂಖ್ಯೆ ನಕಲಿಸಿ" : "Copy Number"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-500 leading-relaxed pt-0.5">
+                {language === "kn"
+                  ? "ಡೆಸ್ಕ್‌ಟಾಪ್ ಬಳಕೆದಾರರು: ನಿಮ್ಮ ಮೊಬೈಲ್ ಫೋನ್‌ನಿಂದ ಈ ಸಂಖ್ಯೆಗೆ ನೇರವಾಗಿ ಡಯಲ್ ಮಾಡಿ ಅಥವಾ ಕೆಳಗೆ WhatsApp ಮೂಲಕ ಸಂದೇಶ ಕಳುಹಿಸಿ."
+                  : "Desktop user: Copy or dial this number on your phone to reach the worker directly with zero commission."}
+              </p>
+            </div>
+
+            {/* Prominent WhatsApp Alternative Option */}
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-emerald-600" />
+                <span>{language === "kn" ? "ಅಥವಾ WhatsApp ಮೂಲಕ ಸಂಪರ್ಕಿಸಿ:" : "Or Message via WhatsApp Web:"}</span>
+              </label>
+
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => handleSendInquiry()}
+                className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-white py-3 px-4 rounded-xl text-xs font-bold shadow-md shadow-emerald-950/15 transition cursor-pointer"
+              >
+                <MessageCircle className="w-4 h-4 fill-white text-white" />
+                <span>{language === "kn" ? "WhatsApp ವೆಬ್ ಮೂಲಕ ಚಾಟ್ ಮಾಡಿ" : "Open Chat in WhatsApp Web"}</span>
+              </a>
+              <p className="text-[10px] text-slate-400 text-center">
+                Works instantly on desktop browsers with pre-filled inquiry text.
+              </p>
+            </div>
+
+            {/* Fallback tel: link for desktop users with VoIP/Skype/FaceTime */}
+            <div className="pt-1 text-center border-t border-slate-100">
+              <a 
+                href={`tel:${worker.phone.trim()}`}
+                className="text-[11px] text-slate-400 hover:text-emerald-700 underline font-mono transition"
+                title="Open system dialer if configured"
+              >
+                {language === "kn" ? "ಕಂಪ್ಯೂಟರ್ ಡಯಲರ್ ಆಪ್‌ನಲ್ಲಿ ತೆರೆಯಿರಿ (tel:)" : "Have a calling app on your PC? Open system dialer"}
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Social Media Share Modal */}
       {showShareModal && (
         <div 
@@ -2121,7 +2339,7 @@ export default function WorkerCard({
               <div className="grid grid-cols-2 gap-2">
                 {/* WhatsApp */}
                 <a
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out ${worker.name}'s verified artisan profile on Namma-Kelsa (Daily Rate: ₹${worker.dailyRate}/day):\n${generateShareUrl()}`)}`}
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out ${worker.name}'s artisan profile on Namma Kelasa (Daily Rate: ₹${worker.dailyRate}/day):\n${generateShareUrl()}`)}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition shadow-2xs cursor-pointer"
@@ -2132,7 +2350,7 @@ export default function WorkerCard({
 
                 {/* Twitter / X */}
                 <a
-                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Hire ${worker.name} directly on Namma-Kelsa with zero commission! Rate: ₹${worker.dailyRate}/day`)}&url=${encodeURIComponent(generateShareUrl())}`}
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Hire ${worker.name} directly on Namma Kelasa with zero commission! Rate: ₹${worker.dailyRate}/day`)}&url=${encodeURIComponent(generateShareUrl())}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold transition shadow-2xs cursor-pointer"

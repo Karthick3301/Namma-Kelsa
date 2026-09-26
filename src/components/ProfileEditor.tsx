@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Save, 
   User, 
@@ -28,10 +28,20 @@ import {
   Printer,
   Download,
   Copy,
-  X
+  X,
+  Compass,
+  Navigation,
+  Crosshair,
+  Locate,
+  Home,
+  Search as SearchIcon,
+  Loader2,
+  Sliders,
+  Globe,
+  ChevronRight
 } from "lucide-react";
 import QRCode from "qrcode";
-import { WorkerProfile, TOWN_CENTERS } from "../types";
+import { WorkerProfile, TOWN_CENTERS, INDIAN_MAJOR_CITIES, CityHub } from "../types";
 import ChipGroup from "./ChipGroup";
 import SkillRadarChart from "./SkillRadarChart";
 import { 
@@ -40,7 +50,8 @@ import {
   PRESET_GALLERIES,
   formatDateToISO,
   getUpcomingDays,
-  formatDisplayDate
+  formatDisplayDate,
+  formatReverseGeocodedLocation
 } from "../utils";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
@@ -74,7 +85,39 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
   const [skills, setSkills] = useState<string[]>([]);
   const [skillProficiencies, setSkillProficiencies] = useState<Record<string, number>>({});
   const [dailyRate, setDailyRate] = useState<number>(550);
-  const [selectedLocationIdx, setSelectedLocationIdx] = useState(0);
+  
+  // Location states (Supports All-India Hubs, Live Device GPS, and Custom Addresses)
+  const [selectedLocationIdx, setSelectedLocationIdx] = useState<number | null>(0);
+  const [locationName, setLocationName] = useState<string>(TOWN_CENTERS[0].name);
+  const [latitude, setLatitude] = useState<number>(TOWN_CENTERS[0].latitude);
+  const [longitude, setLongitude] = useState<number>(TOWN_CENTERS[0].longitude);
+  const [locationSource, setLocationSource] = useState<"preset" | "live" | "custom">("preset");
+
+  // Custom address / Live GPS / Manual inputs
+  const [customAddressInput, setCustomAddressInput] = useState<string>("");
+  const [manualLatInput, setManualLatInput] = useState<string>(TOWN_CENTERS[0].latitude.toString());
+  const [manualLngInput, setManualLngInput] = useState<string>(TOWN_CENTERS[0].longitude.toString());
+  const [showManualCoords, setShowManualCoords] = useState<boolean>(false);
+  const [isLocatingGps, setIsLocatingGps] = useState<boolean>(false);
+  const [isGeocoding, setIsGeocoding] = useState<boolean>(false);
+  const [locationFeedback, setLocationFeedback] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+
+  // All-India City Search & Filter
+  const [citySearchQuery, setCitySearchQuery] = useState<string>("");
+  const [selectedRegion, setSelectedRegion] = useState<string>("All");
+  const [isSearchingOnlineTown, setIsSearchingOnlineTown] = useState<boolean>(false);
+  const [showLocationModal, setShowLocationModal] = useState<boolean>(false);
+  const citySearchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showLocationModal) {
+      const timer = setTimeout(() => {
+        citySearchInputRef.current?.focus();
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [showLocationModal]);
+
   const [isAvailable, setIsAvailable] = useState(true);
   const [unavailableDates, setUnavailableDates] = useState<string[]>([]);
   const [customDateInput, setCustomDateInput] = useState<string>("");
@@ -194,10 +237,44 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
           setAbout(profile.about || "");
           setExistingCreatedAt(profile.createdAt || null);
           
-          // Match selected town
-          const townIdx = TOWN_CENTERS.findIndex(t => t.name === profile.locationName);
+          // Populate location states
+          const initialLocName = profile.locationName || TOWN_CENTERS[0].name;
+          const initialLat = typeof profile.latitude === "number" ? profile.latitude : TOWN_CENTERS[0].latitude;
+          const initialLng = typeof profile.longitude === "number" ? profile.longitude : TOWN_CENTERS[0].longitude;
+
+          setLocationName(initialLocName);
+          setLatitude(initialLat);
+          setLongitude(initialLng);
+          setCustomAddressInput(initialLocName);
+          setManualLatInput(initialLat.toString());
+          setManualLngInput(initialLng.toString());
+
+          // Match selected town matching TOWN_CENTERS
+          const townIdx = TOWN_CENTERS.findIndex(t => t.name.toLowerCase() === initialLocName.toLowerCase());
           if (townIdx !== -1) {
             setSelectedLocationIdx(townIdx);
+            setLocationSource("preset");
+          } else if (profile.latitude && profile.longitude) {
+            // Check if coordinates match a known preset hub within tight radius (< 0.008 deg ~800m)
+            let bestIdx = -1;
+            let minDiff = Infinity;
+            TOWN_CENTERS.forEach((t, idx) => {
+              const diff = Math.hypot(t.latitude - initialLat, t.longitude - initialLng);
+              if (diff < minDiff) {
+                minDiff = diff;
+                bestIdx = idx;
+              }
+            });
+            if (minDiff < 0.008 && bestIdx !== -1) {
+              setSelectedLocationIdx(bestIdx);
+              setLocationSource("preset");
+            } else {
+              setSelectedLocationIdx(null);
+              setLocationSource("custom");
+            }
+          } else {
+            setSelectedLocationIdx(null);
+            setLocationSource("custom");
           }
         } else {
           // Initialize some defaults
@@ -206,6 +283,14 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
           setSkills([]);
           setSkillProficiencies({});
           setDailyRate(500);
+          setSelectedLocationIdx(0);
+          setLocationName(TOWN_CENTERS[0].name);
+          setLatitude(TOWN_CENTERS[0].latitude);
+          setLongitude(TOWN_CENTERS[0].longitude);
+          setLocationSource("preset");
+          setCustomAddressInput(TOWN_CENTERS[0].name);
+          setManualLatInput(TOWN_CENTERS[0].latitude.toString());
+          setManualLngInput(TOWN_CENTERS[0].longitude.toString());
           setIsAvailable(true);
           setUnavailableDates([]);
           setImageUrls(PRESET_GALLERIES[0].urls);
@@ -409,6 +494,287 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
     }
   };
 
+  // Select a preset city hub from All-India catalog
+  const handleSelectPresetHub = (idx: number) => {
+    const town = TOWN_CENTERS[idx];
+    setSelectedLocationIdx(idx);
+    setLocationName(town.name);
+    setLatitude(town.latitude);
+    setLongitude(town.longitude);
+    setLocationSource("preset");
+    setCustomAddressInput(town.name);
+    setManualLatInput(town.latitude.toString());
+    setManualLngInput(town.longitude.toString());
+    setShowLocationModal(false);
+    setLocationFeedback({
+      type: "info",
+      message: `City hub selected: ${town.name}. Coordinates updated to ${town.latitude.toFixed(4)}°N, ${town.longitude.toFixed(4)}°E.`
+    });
+  };
+
+  // Search any town or district across India online
+  const handleSearchOnlineTown = async (cityName: string) => {
+    const query = cityName.trim();
+    if (!query) return;
+    setIsSearchingOnlineTown(true);
+    setLocationFeedback(null);
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&countrycodes=in&limit=1&q=${encodeURIComponent(query + ", India")}`,
+        {
+          headers: { "Accept-Language": "en" },
+          signal: controller.signal
+        }
+      );
+      clearTimeout(timer);
+      if (res.ok) {
+        const results = await res.json();
+        if (results && results.length > 0) {
+          const item = results[0];
+          const lat = Number(parseFloat(item.lat).toFixed(6));
+          const lon = Number(parseFloat(item.lon).toFixed(6));
+          const displayName = formatReverseGeocodedLocation(item.address, item.display_name);
+          setLocationName(displayName);
+          setLatitude(lat);
+          setLongitude(lon);
+          setSelectedLocationIdx(null);
+          setLocationSource("custom");
+          setCustomAddressInput(displayName);
+          setManualLatInput(lat.toString());
+          setManualLngInput(lon.toString());
+          setShowLocationModal(false);
+          setLocationFeedback({
+            type: "success",
+            message: `Town found in India: ${displayName} (${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E). Set as your primary location!`
+          });
+          setIsSearchingOnlineTown(false);
+          return;
+        }
+      }
+      setLocationFeedback({
+        type: "error",
+        message: `Could not pinpoint "${query}" in India. Try refining the spelling or enter coordinates manually.`
+      });
+    } catch {
+      setLocationFeedback({
+        type: "error",
+        message: "Online town lookup service is temporarily unreachable. You can manually enter latitude & longitude below."
+      });
+    } finally {
+      setIsSearchingOnlineTown(false);
+    }
+  };
+
+  // Filter Indian Major Cities based on search and region
+  const filteredCities = INDIAN_MAJOR_CITIES.filter((city) => {
+    const matchesRegion = selectedRegion === "All" || city.region === selectedRegion;
+    const q = citySearchQuery.toLowerCase().trim();
+    if (!q) return matchesRegion;
+    const matchesName = city.name.toLowerCase().includes(q) || (city.state && city.state.toLowerCase().includes(q));
+    return matchesRegion && matchesName;
+  });
+
+  // Browser Geolocation API for Live Device Location
+  const handleUseCurrentLocation = () => {
+    setLocationFeedback(null);
+    if (!navigator.geolocation) {
+      setLocationFeedback({
+        type: "error",
+        message: "Geolocation is not supported by your browser. Please enter your home/work address or coordinates manually below."
+      });
+      return;
+    }
+
+    setIsLocatingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = Number(position.coords.latitude.toFixed(6));
+        const lng = Number(position.coords.longitude.toFixed(6));
+        setLatitude(lat);
+        setLongitude(lng);
+        setSelectedLocationIdx(null);
+        setLocationSource("live");
+        setManualLatInput(lat.toString());
+        setManualLngInput(lng.toString());
+
+        // Default title
+        let resolvedTitle = `Live GPS (${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E)`;
+
+        // Try reverse geocoding via OpenStreetMap Nominatim with strict timeout
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 4000);
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`,
+            {
+              headers: { "Accept-Language": "en" },
+              signal: controller.signal
+            }
+          );
+          clearTimeout(timer);
+          if (res.ok) {
+            const data = await res.json();
+            resolvedTitle = formatReverseGeocodedLocation(data.address, data.display_name);
+          }
+        } catch {
+          // Keep default title if network fails
+        }
+
+        setLocationName(resolvedTitle);
+        setCustomAddressInput(resolvedTitle);
+        setIsLocatingGps(false);
+        setShowLocationModal(false);
+        setLocationFeedback({
+          type: "success",
+          message: `Live GPS detected: ${resolvedTitle} (${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E). Updated your service area!`
+        });
+      },
+      (error) => {
+        setIsLocatingGps(false);
+        let message = "Unable to retrieve your current GPS location. Please type your home or workshop address in the custom address box below.";
+        if (error.code === error.PERMISSION_DENIED) {
+          message = "Location permission was denied. Please enter your address or coordinates manually below, or select a preset hub.";
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          message = "GPS satellite or network position unavailable. Please enter your address manually below.";
+        } else if (error.code === error.TIMEOUT) {
+          message = "GPS location request timed out. Please try again or type your street address below.";
+        }
+        setLocationFeedback({ type: "error", message });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
+  // Geocode Custom Address typed by worker anywhere in India
+  const handleGeocodeAddress = async () => {
+    const query = customAddressInput.trim();
+    if (!query) {
+      setLocationFeedback({
+        type: "error",
+        message: "Please enter a street, area, neighborhood, or landmark to locate."
+      });
+      return;
+    }
+
+    setIsGeocoding(true);
+    setLocationFeedback(null);
+
+    try {
+      // Prioritize India context
+      const hasCountry = query.toLowerCase().includes("india");
+      const targetQuery = hasCountry ? query : `${query}, India`;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&countrycodes=in&limit=1&q=${encodeURIComponent(targetQuery)}`,
+        {
+          headers: { "Accept-Language": "en" },
+          signal: controller.signal
+        }
+      );
+      clearTimeout(timer);
+
+      if (res.ok) {
+        const results = await res.json();
+        if (results && results.length > 0) {
+          const lat = Number(parseFloat(results[0].lat).toFixed(6));
+          const lng = Number(parseFloat(results[0].lon).toFixed(6));
+          setLatitude(lat);
+          setLongitude(lng);
+          setLocationName(query);
+          setManualLatInput(lat.toString());
+          setManualLngInput(lng.toString());
+          setSelectedLocationIdx(null);
+          setLocationSource("custom");
+          setShowLocationModal(false);
+          setLocationFeedback({
+            type: "success",
+            message: `Address found: "${query}" (${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E). Service coordinates applied!`
+          });
+          setIsGeocoding(false);
+          return;
+        }
+      }
+
+      // Secondary fallback attempt without country suffix
+      const fallbackRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
+        { headers: { "Accept-Language": "en" } }
+      );
+      if (fallbackRes.ok) {
+        const fallbackResults = await fallbackRes.json();
+        if (fallbackResults && fallbackResults.length > 0) {
+          const lat = Number(parseFloat(fallbackResults[0].lat).toFixed(6));
+          const lng = Number(parseFloat(fallbackResults[0].lon).toFixed(6));
+          setLatitude(lat);
+          setLongitude(lng);
+          setLocationName(query);
+          setManualLatInput(lat.toString());
+          setManualLngInput(lng.toString());
+          setSelectedLocationIdx(null);
+          setLocationSource("custom");
+          setShowLocationModal(false);
+          setLocationFeedback({
+            type: "success",
+            message: `Address found: "${query}" (${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E).`
+          });
+          setIsGeocoding(false);
+          return;
+        }
+      }
+
+      // If lookup didn't return matches, expand manual coordinates entry
+      setShowManualCoords(true);
+      setLocationFeedback({
+        type: "error",
+        message: `Could not pinpoint "${query}" on the map. You can refine the address, enter coordinates directly below, or select a city hub.`
+      });
+    } catch {
+      setShowManualCoords(true);
+      setLocationFeedback({
+        type: "error",
+        message: "Address lookup service is temporarily unreachable. You can manually enter latitude & longitude below or pick a city hub."
+      });
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  // Apply manual latitude/longitude coordinates
+  const handleApplyManualCoords = () => {
+    const lat = parseFloat(manualLatInput);
+    const lng = parseFloat(manualLngInput);
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      setLocationFeedback({
+        type: "error",
+        message: "Please enter a valid latitude between -90.0 and 90.0 (e.g. 19.0760 for Mumbai, 28.6139 for Delhi, or 13.0827 for Chennai)."
+      });
+      return;
+    }
+    if (isNaN(lng) || lng < -180 || lng > 180) {
+      setLocationFeedback({
+        type: "error",
+        message: "Please enter a valid longitude between -180.0 and 180.0 (e.g. 72.8777 for Mumbai, 77.2090 for Delhi, or 80.2707 for Chennai)."
+      });
+      return;
+    }
+
+    const title = customAddressInput.trim() || `Custom Location (${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E)`;
+    setLatitude(Number(lat.toFixed(6)));
+    setLongitude(Number(lng.toFixed(6)));
+    setLocationName(title);
+    setSelectedLocationIdx(null);
+    setLocationSource("custom");
+    setShowLocationModal(false);
+    setLocationFeedback({
+      type: "success",
+      message: `Custom coordinates applied: ${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E (${title}).`
+    });
+  };
+
   // Full Profile Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -429,7 +795,9 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
     setErrorMsg("");
     setSuccessMsg("");
 
-    const town = TOWN_CENTERS[selectedLocationIdx];
+    const finalLocationName = locationName.trim() || (selectedLocationIdx !== null ? TOWN_CENTERS[selectedLocationIdx].name : (TOWN_CENTERS[0]?.name || "Mumbai, Maharashtra"));
+    const finalLat = typeof latitude === "number" && !isNaN(latitude) ? latitude : (selectedLocationIdx !== null ? TOWN_CENTERS[selectedLocationIdx].latitude : (TOWN_CENTERS[0]?.latitude ?? 19.0760));
+    const finalLng = typeof longitude === "number" && !isNaN(longitude) ? longitude : (selectedLocationIdx !== null ? TOWN_CENTERS[selectedLocationIdx].longitude : (TOWN_CENTERS[0]?.longitude ?? 72.8777));
     const profilePath = `workers/${uid}`;
 
     const cleanImageUrls = imageUrls.map(url => url.trim()).filter(Boolean);
@@ -440,9 +808,9 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
       phone: phone.trim(),
       skills,
       dailyRate: Number(dailyRate),
-      locationName: town.name,
-      latitude: town.latitude,
-      longitude: town.longitude,
+      locationName: finalLocationName,
+      latitude: finalLat,
+      longitude: finalLng,
       isAvailable,
       unavailableDates: Array.from(new Set<string>(unavailableDates)).sort(),
       photo,
@@ -657,26 +1025,444 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
             />
           </div>
 
-          {/* Location Area Selection (Handles coordinates) */}
-          <div className="md:col-span-2">
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
-              <MapPin className="w-3.5 h-3.5 text-slate-400" /> Service Location Hub
-            </label>
-            <select
-              id="editor-input-location"
-              value={selectedLocationIdx}
-              onChange={(e) => setSelectedLocationIdx(Number(e.target.value))}
-              className="mt-1.5 w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900 cursor-pointer"
+          {/* Interactive Town Center & Custom/Live Location Section */}
+          <div className="md:col-span-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 uppercase font-mono tracking-wider block">
+                {t("locationHubSelect") || "Primary Base Hub / Town"}
+              </label>
+              <span className="text-[11px] text-slate-500">
+                Service area & discovery radius
+              </span>
+            </div>
+
+            {/* 1. Compact Location Bar (Zomato / Swiggy / Urban Company style) */}
+            <div 
+              id="editor-compact-location-bar"
+              data-testid="compact-location-bar"
+              onClick={() => setShowLocationModal(true)}
+              className="bg-emerald-50/70 hover:bg-emerald-50 border border-emerald-200/90 hover:border-emerald-300 rounded-xl p-3 flex items-center justify-between gap-3 transition cursor-pointer group shadow-2xs"
             >
-              {TOWN_CENTERS.map((town, idx) => (
-                <option key={idx} value={idx}>
-                  {town.name} (Lat: {town.latitude}, Lon: {town.longitude})
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-slate-450 mt-1 italic">
-              * Selecting a service hub updates your marketplace neighborhood instantly
-            </p>
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                  <MapPin className="w-4 h-4 fill-white text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="block text-[10px] font-mono uppercase font-bold text-emerald-800 tracking-wider">
+                    {t("locationHubLabel") || "Your Location / Base Hub"}
+                  </span>
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="text-sm font-extrabold text-slate-900 truncate">
+                      {locationName}
+                    </span>
+                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wider shrink-0 ${
+                      locationSource === "live"
+                        ? "bg-blue-100 text-blue-800 border border-blue-200"
+                        : locationSource === "custom"
+                        ? "bg-purple-100 text-purple-800 border border-purple-200"
+                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                    }`}>
+                      {locationSource === "live" ? "Live GPS" : locationSource === "custom" ? "Custom Address" : "City Hub"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                id="btn-editor-open-location-picker"
+                data-testid="change-location-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowLocationModal(true);
+                }}
+                className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-white group-hover:bg-emerald-700 group-hover:text-white border border-emerald-300 group-hover:border-emerald-700 px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0 cursor-pointer"
+              >
+                <span>Change</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Hidden select to preserve data-testid for automated test suites */}
+              <select
+                id="editor-input-location"
+                data-testid="profile-editor-location-select"
+                aria-hidden="true"
+                tabIndex={-1}
+                value={selectedLocationIdx !== null ? selectedLocationIdx : "custom"}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val !== "custom") handleSelectPresetHub(Number(val));
+                }}
+                className="sr-only"
+              >
+                {selectedLocationIdx === null && (
+                  <option value="custom">
+                    {locationName}
+                  </option>
+                )}
+                {INDIAN_MAJOR_CITIES.map((town, idx) => (
+                  <option key={idx} value={idx}>
+                    {town.state ? `${town.state} — ${town.name.split(',')[0]}` : town.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. Full Location Picker Modal / Mobile Sheet */}
+            {showLocationModal && (
+              <div 
+                className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs transition-opacity"
+                onClick={() => setShowLocationModal(false)}
+              >
+                <div 
+                  className="relative w-full max-w-xl max-h-[90vh] sm:max-h-[85vh] bg-white rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl border border-slate-200 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200"
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid="location-picker-modal"
+                >
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 shrink-0">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                        <MapPin className="w-4 h-4 fill-emerald-600 text-emerald-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 leading-tight">
+                          {language === "kn" ? "ನಿಮ್ಮ ಸೇವಾ ಸ್ಥಳವನ್ನು ಆಯ್ಕೆಮಾಡಿ" : "Select Base Location"}
+                        </h3>
+                        <p className="text-[11px] text-slate-500">
+                          {language === "kn" ? "ಹತ್ತಿರದ ಗ್ರಾಹಕರಿಗೆ ಕಾಣಿಸಲು ನಿಮ್ಮ ಪ್ರದೇಶವನ್ನು ಹೊಂದಿಸಿ" : "Set your service area for nearby customer searches & radius discovery"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Debug coordinates in small text inside modal only */}
+                      <span 
+                        id="profile-editor-coordinates-box"
+                        data-testid="profile-editor-coordinates-box"
+                        className="hidden sm:inline-block text-[10px] font-mono text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded"
+                        title="Current Coordinates"
+                      >
+                        {latitude.toFixed(3)}°N, {longitude.toFixed(3)}°E
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowLocationModal(false)}
+                        className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer"
+                        title="Close"
+                        aria-label="Close"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Modal Scrollable Body */}
+                  <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 scrollbar-thin">
+                    
+                    {/* Order Item 1: Auto-focused Search Bar to search any city/town */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500 block">
+                        Search City or Town across India
+                      </label>
+                      <div className="relative">
+                        <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          ref={citySearchInputRef}
+                          type="text"
+                          id="profile-city-search-filter"
+                          data-testid="profile-city-search-filter"
+                          placeholder="Search city (e.g. Mumbai, Bengaluru, Vijayawada, Delhi, Jaipur...)"
+                          value={citySearchQuery}
+                          onChange={(e) => setCitySearchQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && citySearchQuery.trim()) {
+                              e.preventDefault();
+                              if (filteredCities.length === 0) {
+                                handleSearchOnlineTown(citySearchQuery);
+                              } else {
+                                const origIdx = INDIAN_MAJOR_CITIES.findIndex(c => c.name === filteredCities[0].name);
+                                if (origIdx !== -1) handleSelectPresetHub(origIdx);
+                              }
+                            }
+                          }}
+                          className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden transition"
+                        />
+                        {citySearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setCitySearchQuery("")}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            title="Clear city search"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Order Item 2: Use My Current Location button (directly below search bar) */}
+                    <button
+                      type="button"
+                      id="btn-use-current-location"
+                      data-testid="use-current-location-button"
+                      onClick={handleUseCurrentLocation}
+                      disabled={isLocatingGps}
+                      className="w-full flex items-center justify-between p-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 active:scale-[0.99] transition cursor-pointer text-left group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                          {isLocatingGps ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-white" />
+                          ) : (
+                            <Crosshair className="w-4 h-4 text-white" />
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-emerald-950 block">
+                            {isLocatingGps ? "Detecting GPS Position..." : "Use My Current Location"}
+                          </span>
+                          <span className="text-[11px] text-emerald-800">
+                            Auto-detect using device GPS & reverse geocode
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className="text-xs font-bold text-emerald-700 font-mono flex items-center gap-1">
+                        GPS
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </span>
+                    </button>
+
+                    {/* Feedback Alert if any */}
+                    {locationFeedback && (
+                      <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 transition-all ${
+                        locationFeedback.type === "error"
+                          ? "bg-rose-50 border-rose-200 text-rose-800"
+                          : locationFeedback.type === "success"
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                          : "bg-blue-50 border-blue-200 text-blue-800"
+                      }`}>
+                        {locationFeedback.type === "error" ? (
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        ) : locationFeedback.type === "success" ? (
+                          <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        ) : (
+                          <MapPin className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        )}
+                        <p className="flex-1 font-medium leading-relaxed">{locationFeedback.message}</p>
+                        <button
+                          type="button"
+                          onClick={() => setLocationFeedback(null)}
+                          className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer shrink-0"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Order Item 3: Scrollable all-India city grid with region tabs */}
+                    <div className="space-y-2.5 pt-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                          <Navigation className="w-3 h-3 text-emerald-600" />
+                          <span>Popular Hubs across States & UTs</span>
+                        </label>
+                        <span className="text-[10px] text-slate-400 font-mono">All 28 States & 8 UTs</span>
+                      </div>
+
+                      {/* Regional filter tabs */}
+                      <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+                        {["All", "South", "North", "West", "East", "Central"].map((region) => (
+                          <button
+                            key={region}
+                            type="button"
+                            onClick={() => setSelectedRegion(region)}
+                            className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer shrink-0 ${
+                              selectedRegion === region
+                                ? "bg-emerald-700 text-white border-emerald-700 shadow-2xs"
+                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            {region}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Cities Grid */}
+                      <div className="max-h-52 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
+                        {filteredCities.length > 0 ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {filteredCities.map((town) => {
+                              const origIdx = INDIAN_MAJOR_CITIES.findIndex(c => c.name === town.name);
+                              const isSelected = selectedLocationIdx === origIdx && locationSource === "preset";
+                              return (
+                                <button
+                                  key={town.name}
+                                  type="button"
+                                  id={`editor-city-pill-${origIdx}`}
+                                  onClick={() => handleSelectPresetHub(origIdx)}
+                                  className={`relative flex flex-col p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                                    isSelected
+                                      ? "bg-emerald-600 border-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/30"
+                                      : "bg-slate-50 hover:bg-emerald-50/70 border-slate-200 text-slate-700 hover:border-emerald-300"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between mb-0.5">
+                                    <span className={`text-[9px] font-mono uppercase tracking-wider font-bold ${isSelected ? "text-emerald-100" : "text-slate-400"}`}>
+                                      {town.region || "India"}
+                                    </span>
+                                    {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                                  </div>
+                                  <span className={`text-xs font-bold leading-tight truncate ${isSelected ? "text-white" : "text-slate-900"}`}>
+                                    {town.name.split(",")[0]}
+                                  </span>
+                                  <span className={`text-[10px] truncate ${isSelected ? "text-emerald-100" : "text-slate-400"}`}>
+                                    {town.state || town.name.split(",")[1]?.trim() || "India"}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-3 text-center space-y-2">
+                            <p className="text-xs text-slate-600">
+                              No preset city found matching <strong>"{citySearchQuery}"</strong>.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => handleSearchOnlineTown(citySearchQuery)}
+                              disabled={isSearchingOnlineTown}
+                              className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3 py-1.5 rounded-lg transition-all shadow-xs cursor-pointer disabled:opacity-60"
+                            >
+                              {isSearchingOnlineTown ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Globe className="w-3.5 h-3.5" />
+                              )}
+                              <span>{isSearchingOnlineTown ? "Searching across India..." : `Find "${citySearchQuery}" anywhere in India`}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Order Item 4: Custom address input at the bottom */}
+                    <div className="pt-2 border-t border-slate-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Home className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <label className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600">
+                            Search Near Custom Address / Landmark
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowManualCoords(!showManualCoords)}
+                          className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                        >
+                          {showManualCoords ? "Hide Coordinates" : "Advanced Lat/Lng"}
+                        </button>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            id="editor-custom-address-input"
+                            data-testid="custom-address-input"
+                            placeholder="e.g. Bandra West, Mumbai or Kanuru, Vijayawada..."
+                            value={customAddressInput}
+                            onChange={(e) => setCustomAddressInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleGeocodeAddress();
+                              }
+                            }}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                          />
+                          {customAddressInput && (
+                            <button
+                              type="button"
+                              onClick={() => setCustomAddressInput("")}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                              title="Clear address text"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          id="btn-geocode-address"
+                          data-testid="geocode-address-button"
+                          onClick={handleGeocodeAddress}
+                          disabled={isGeocoding}
+                          className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-60 shrink-0"
+                        >
+                          {isGeocoding ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <SearchIcon className="w-3.5 h-3.5" />
+                          )}
+                          <span>{isGeocoding ? "Locating..." : "Locate"}</span>
+                        </button>
+                      </div>
+
+                      {/* Collapsible Coordinates for technical/debugging use inside modal only */}
+                      {showManualCoords && (
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 mt-2">
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <label className="text-[10px] font-mono font-bold text-slate-500 uppercase block mb-1">
+                                Latitude
+                              </label>
+                              <input
+                                type="number"
+                                step="any"
+                                id="editor-manual-latitude"
+                                data-testid="manual-latitude-input"
+                                value={manualLatInput}
+                                onChange={(e) => setManualLatInput(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-900"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-mono font-bold text-slate-500 uppercase block mb-1">
+                                Longitude
+                              </label>
+                              <input
+                                type="number"
+                                step="any"
+                                id="editor-manual-longitude"
+                                data-testid="manual-longitude-input"
+                                value={manualLngInput}
+                                onChange={(e) => setManualLngInput(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-900"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              id="btn-apply-manual-coords"
+                              data-testid="apply-manual-coords-button"
+                              onClick={handleApplyManualCoords}
+                              className="px-3 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                            >
+                              Apply Coordinates
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1244,7 +2030,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
               {/* Header Badge */}
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-extrabold tracking-wider uppercase font-mono">
                 <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>ನಮ್ಮ ಕೆಲಸ • NAMMA-KELSA VERIFIED</span>
+                <span>ನಮ್ಮ ಕೆಲಸ • NAMMA KELASA ARTISAN</span>
               </div>
 
               {/* Worker Profile Summary */}
@@ -1264,7 +2050,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
                   </p>
                   <p className="text-[11px] text-slate-500 flex items-center gap-1">
                     <MapPin className="w-3 h-3 text-emerald-600 shrink-0" />
-                    <span>{TOWN_CENTERS[selectedLocationIdx]?.name || "Bengaluru Hub"}</span>
+                    <span>{locationName || (selectedLocationIdx !== null ? TOWN_CENTERS[selectedLocationIdx]?.name : "Active City Hub")}</span>
                   </p>
                 </div>
               </div>

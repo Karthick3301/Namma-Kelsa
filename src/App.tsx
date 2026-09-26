@@ -21,8 +21,8 @@ import {
 import { collection, onSnapshot, getDocs, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
-import { WorkerProfile, TOWN_CENTERS } from "./types";
-import { calculateDistance, MOCK_WORKERS } from "./utils";
+import { WorkerProfile, TOWN_CENTERS, CustomerLocation } from "./types";
+import { calculateDistance, MOCK_WORKERS, formatReverseGeocodedLocation } from "./utils";
 import SearchFilters from "./components/SearchFilters";
 import WorkerCard from "./components/WorkerCard";
 import ProfileEditor from "./components/ProfileEditor";
@@ -49,9 +49,10 @@ export default function App() {
   // Customer search filters state
   const [searchText, setSearchText] = useState("");
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
-  const [maxDistance, setMaxDistance] = useState<number>(10);
-  const [onlyAvailable, setOnlyAvailable] = useState<boolean>(true);
-  const [selectedTownIdx, setSelectedTownIdx] = useState<number>(0);
+  const [maxDistance, setMaxDistance] = useState<number>(30);
+  const [onlyAvailable, setOnlyAvailable] = useState<boolean>(false);
+  const [selectedTownIdx, setSelectedTownIdx] = useState<number | null>(0);
+  const [customerLocation, setCustomerLocation] = useState<CustomerLocation>(TOWN_CENTERS[0]);
 
   // Local state 'favorites' array storing worker UIDs with localStorage persistence
   const [favorites, setFavorites] = useState<string[]>(() => {
@@ -76,6 +77,50 @@ export default function App() {
       console.error("Error saving favorites to localStorage", e);
     }
   }, [favorites]);
+
+  // Silently auto-detect customer location on first load if browser GPS permission is available
+  useEffect(() => {
+    if (typeof window === "undefined" || !navigator.geolocation) return;
+
+    let isMounted = true;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        if (!isMounted) return;
+        const lat = Number(pos.coords.latitude.toFixed(6));
+        const lng = Number(pos.coords.longitude.toFixed(6));
+        let resolvedTitle = `Current Location (${lat.toFixed(2)}°, ${lng.toFixed(2)}°)`;
+
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 4000);
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`,
+            { headers: { "Accept-Language": "en" }, signal: controller.signal }
+          );
+          clearTimeout(timer);
+          if (res.ok) {
+            const data = await res.json();
+            resolvedTitle = formatReverseGeocodedLocation(data.address, data.display_name);
+          }
+        } catch {
+          // Keep coordinates fallback
+        }
+
+        if (isMounted) {
+          setSelectedTownIdx(null);
+          setCustomerLocation({ name: resolvedTitle, latitude: lat, longitude: lng });
+        }
+      },
+      () => {
+        // Silent fallback - user denied or position unavailable. Remains gracefully on default hub
+      },
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 300000 }
+    );
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleToggleFavorite = (workerUid: string) => {
     setFavorites((prev) => {
@@ -203,7 +248,7 @@ export default function App() {
           updatedAt: serverTimestamp()
         }, { merge: true });
       }
-      alert("Premium labor database populated with 3 active professional workers!");
+      alert("Artisan directory loaded with skilled independent professionals across India!");
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, "workers/seeding");
     } finally {
@@ -211,17 +256,24 @@ export default function App() {
     }
   };
 
-  // Compute live filtered search list
-  const activeCustomerTown = TOWN_CENTERS[selectedTownIdx];
+  // Compute live filtered search list based on customer location (Preset Hub, Live GPS, or Custom Address)
+  const activeCustomerLocation: CustomerLocation = customerLocation || (selectedTownIdx !== null ? TOWN_CENTERS[selectedTownIdx] : TOWN_CENTERS[0]);
 
   const filteredWorkers = workers
     .map((w) => {
-      const dist = calculateDistance(
-        activeCustomerTown.latitude,
-        activeCustomerTown.longitude,
-        w.latitude || 12.9174,
-        w.longitude || 77.4838
-      );
+      const hasValidWorkerLat = typeof w.latitude === "number" && !isNaN(w.latitude) && w.latitude >= -90 && w.latitude <= 90;
+      const hasValidWorkerLon = typeof w.longitude === "number" && !isNaN(w.longitude) && w.longitude >= -180 && w.longitude <= 180;
+      const hasValidCustomerLat = typeof activeCustomerLocation.latitude === "number" && !isNaN(activeCustomerLocation.latitude);
+      const hasValidCustomerLon = typeof activeCustomerLocation.longitude === "number" && !isNaN(activeCustomerLocation.longitude);
+
+      const dist = (hasValidWorkerLat && hasValidWorkerLon && hasValidCustomerLat && hasValidCustomerLon)
+        ? calculateDistance(
+            activeCustomerLocation.latitude,
+            activeCustomerLocation.longitude,
+            w.latitude,
+            w.longitude
+          )
+        : 99999;
       return { ...w, computedDistance: dist };
     })
     .filter((w) => {
@@ -236,8 +288,8 @@ export default function App() {
         const matchesLocation = w.locationName?.toLowerCase().includes(queryLower);
         if (!matchesName && !matchesLocation) return false;
       }
-      // 3. Distance within range constraint
-      if (w.computedDistance > maxDistance) {
+      // 3. Distance within range constraint (if maxDistance < 500)
+      if (maxDistance < 500 && w.computedDistance > maxDistance) {
         return false;
       }
       // 4. Availability checkbox
@@ -249,6 +301,10 @@ export default function App() {
         return false;
       }
       return true;
+    })
+    .sort((a, b) => {
+      // Sort nearest first so "nearby" discovery works seamlessly across India
+      return (a.computedDistance ?? 99999) - (b.computedDistance ?? 99999);
     });
 
   const activeWorkerUid = isDemoMode ? demoUid : currentUser?.uid;
@@ -374,7 +430,7 @@ export default function App() {
       {/* Main Workspace Frame */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         
-        {/* Dignity Mission Banner Card */}
+        {/* Independent Marketplace Hero Banner */}
         <div className="bg-emerald-950 text-emerald-100 rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 border border-emerald-900">
           <div className="absolute right-0 bottom-0 opacity-10 stroke-emerald-100 max-w-[200px] pointer-events-none select-none">
             <Building className="w-64 h-64" />
@@ -382,7 +438,7 @@ export default function App() {
           
           <div className="space-y-2 relative max-w-xl text-center md:text-left">
             <div className="inline-flex items-center gap-1 bg-emerald-900 text-emerald-200 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">
-              <Sparkles className="w-3" /> Karnataka Daily Wage labor Commission Initiative
+              <Sparkles className="w-3" /> Independent Open Marketplace
             </div>
             <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">
               {t("heroTitle")}
@@ -406,10 +462,10 @@ export default function App() {
             )}
             
             <a 
-              href="mailto:support@nammakesla.gov.in"
+              href="mailto:support@nammakelasa.in"
               className="bg-emerald-900 hover:bg-emerald-850 text-emerald-100 hover:text-white font-semibold text-xs px-4.5 py-3 rounded-xl transition duration-200 flex items-center gap-1 border border-emerald-800"
             >
-              Raise Grievance
+              Help & Support
             </a>
           </div>
         </div>
@@ -445,6 +501,8 @@ export default function App() {
                 setOnlyAvailable={setOnlyAvailable}
                 selectedTownIdx={selectedTownIdx}
                 setSelectedTownIdx={setSelectedTownIdx}
+                customerLocation={activeCustomerLocation}
+                setCustomerLocation={setCustomerLocation}
                 showFavoritesOnly={showFavoritesOnly}
                 setShowFavoritesOnly={setShowFavoritesOnly}
                 favoritesCount={favorites.length}
@@ -512,18 +570,30 @@ export default function App() {
                       <p className="text-xs text-zinc-500 mt-1 lines-normal">
                         {t("noWorkersHint")}
                       </p>
-                      <button
-                        onClick={() => {
-                          setSelectedSkill(null);
-                          setSearchText("");
-                          setMaxDistance(25);
-                          setOnlyAvailable(false);
-                          setShowFavoritesOnly(false);
-                        }}
-                        className="mt-4 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition cursor-pointer"
-                      >
-                        {t("resetFilters")}
-                      </button>
+                      <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMaxDistance(500);
+                          }}
+                          className="text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3.5 py-2 rounded-lg transition cursor-pointer"
+                        >
+                          Expand Search (All-India)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSkill(null);
+                            setSearchText("");
+                            setMaxDistance(50);
+                            setOnlyAvailable(false);
+                            setShowFavoritesOnly(false);
+                          }}
+                          className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3.5 py-2 rounded-lg transition cursor-pointer"
+                        >
+                          {t("resetFilters")}
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
@@ -533,9 +603,9 @@ export default function App() {
                     <WorkerCard
                       key={worker.uid}
                       worker={worker}
-                      customerTownName={activeCustomerTown.name}
-                      customerLat={activeCustomerTown.latitude}
-                      customerLon={activeCustomerTown.longitude}
+                      customerTownName={activeCustomerLocation.name}
+                      customerLat={activeCustomerLocation.latitude}
+                      customerLon={activeCustomerLocation.longitude}
                       distance={worker.computedDistance}
                       isFavorite={favorites.includes(worker.uid)}
                       onToggleFavorite={handleToggleFavorite}
@@ -564,7 +634,7 @@ export default function App() {
                     />
                     <div>
                       <h3 className="font-bold text-white text-sm">Welcome, {currentUser.displayName || "Daily Wage Artisan"}!</h3>
-                      <p className="text-xs text-emerald-300/80 font-mono mt-0.5">UID Authentication: {currentUser.uid.slice(0, 10)}... (Verified Artisan Mode)</p>
+                      <p className="text-xs text-emerald-300/80 font-mono mt-0.5">UID Authentication: {currentUser.uid.slice(0, 10)}... (Artisan Account Mode)</p>
                     </div>
                   </div>
 
@@ -680,15 +750,15 @@ export default function App() {
         )}
       </main>
 
-      {/* Modern Humble Footer (No telemetry, no AI-slop background tags) */}
+      {/* Modern Startup Footer */}
       <footer className="bg-white border-t border-zinc-150 mt-12 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500 font-mono">
           <div className="text-center sm:text-left">
-            <p className="font-bold text-zinc-700">Namma-Kelsa Self-Employment Support © 2026</p>
-            <p className="text-[10px] text-zinc-400 mt-1">Direct labor connection bypassing capital middlemen. Bringing digital inclusion to the gig economy.</p>
+            <p className="font-bold text-zinc-700">Namma Kelasa • Independent Marketplace © 2026</p>
+            <p className="text-[10px] text-zinc-400 mt-1">Namma Kelasa is an independent platform connecting skilled workers with customers across India. Direct hire, fair wages, zero commission.</p>
           </div>
           <div className="flex items-center gap-1">
-            <span>Built for the community with</span> <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500 inline-block animate-pulse" /> <span>and Firestore Persistence</span>
+            <span>Built independently for local workers and customers</span>
           </div>
         </div>
       </footer>

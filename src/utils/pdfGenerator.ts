@@ -79,12 +79,12 @@ export async function downloadWorkerProfilePdf(
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.text("NAMMA-KELSA | VERIFIED WORKER PORTFOLIO", margin, 13);
+  doc.text("NAMMA KELASA | ARTISAN PORTFOLIO", margin, 13);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(209, 250, 229);
-  doc.text("Direct Daily-Wage Artisan Directory • Fair Wage & Direct Contact", margin, 21);
+  doc.text("Independent Daily-Wage Marketplace • Direct Contact • Zero Commission", margin, 21);
 
   // 2. Worker Identity Block
   let currentY = 38;
@@ -226,7 +226,7 @@ export async function downloadWorkerProfilePdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(15, 23, 42);
-  doc.text(`VERIFIED PAST WORK PORTFOLIO (${workPhotos.length} Photos)`, margin, currentY);
+  doc.text(`WORK PORTFOLIO GALLERY (${workPhotos.length} Photos)`, margin, currentY);
 
   currentY += 6;
 
@@ -298,7 +298,7 @@ export async function downloadWorkerProfilePdf(
   doc.setFontSize(8);
   doc.setTextColor(148, 163, 184);
   doc.text(
-    `Generated via Namma-Kelsa on ${new Date().toLocaleDateString("en-IN", { dateStyle: "long" })} • Direct Hire • Zero Commission Platform`,
+    `Generated via Namma Kelasa on ${new Date().toLocaleDateString("en-IN", { dateStyle: "long" })} • Direct Hire • Independent Marketplace`,
     pageWidth / 2,
     footerY,
     { align: "center" }

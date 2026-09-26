@@ -31,11 +31,11 @@ export default function MiniMap({
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    // Safe coordinates validation
-    const validWorkerLat = Number.isFinite(workerLat) ? workerLat : 12.9174;
-    const validWorkerLon = Number.isFinite(workerLon) ? workerLon : 77.4838;
-    const validCustLat = Number.isFinite(customerLat) ? customerLat : 12.9716;
-    const validCustLon = Number.isFinite(customerLon) ? customerLon : 77.5946;
+    // Safe coordinates validation with dynamic fallbacks
+    const validCustLat = Number.isFinite(customerLat) ? customerLat : 20.5937;
+    const validCustLon = Number.isFinite(customerLon) ? customerLon : 78.9629;
+    const validWorkerLat = Number.isFinite(workerLat) ? workerLat : validCustLat;
+    const validWorkerLon = Number.isFinite(workerLon) ? workerLon : validCustLon;
 
     try {
       // Clean up previous instance if any
@@ -90,10 +90,10 @@ export default function MiniMap({
       });
 
       const customerMarker = L.marker([validCustLat, validCustLon], { icon: customerIcon }).addTo(map);
-      customerMarker.bindPopup(`<b>Your Selected Town</b><br>${customerTownName}`);
+      customerMarker.bindPopup(`<b>Your Search Center</b><br>${customerTownName}`);
 
       const workerMarker = L.marker([validWorkerLat, validWorkerLon], { icon: workerIcon }).addTo(map);
-      workerMarker.bindPopup(`<b>${workerName}</b><br>${workerLocationName}<br><b>Distance:</b> ${distance} km away`);
+      workerMarker.bindPopup(`<b>${workerName}</b><br>${workerLocationName}<br><b>Distance:</b> ${distance >= 9999 ? "Pending" : distance < 1 ? "< 1 km" : `${distance} km`} away`);
 
       // Connect with dashed line
       const latlngs: [number, number][] = [
@@ -145,7 +145,7 @@ export default function MiniMap({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-mono bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
-            {distance} km
+            {distance >= 9999 ? "Pending" : distance < 1 ? "< 1 km" : `${distance} km`}
           </span>
           <a
             href={navUrl}
@@ -168,7 +168,7 @@ export default function MiniMap({
             {customerTownName} → {workerLocationName}
           </p>
           <p className="text-xs text-slate-500 font-mono mt-1">
-            Distance: <span className="font-bold text-emerald-700">{distance} km</span> away
+            Distance: <span className="font-bold text-emerald-700">{distance >= 9999 ? "Pending" : distance < 1 ? "< 1 km" : `${distance} km`}</span> away
           </p>
           <a
             href={navUrl}
@@ -191,7 +191,7 @@ export default function MiniMap({
           <div className="absolute bottom-1 left-2 right-2 z-10 pointer-events-none">
             <div className="bg-white/90 backdrop-blur-xs text-[10px] text-slate-650 px-2 py-1 rounded-md shadow-2xs border border-slate-200/80 flex items-center justify-between font-mono">
               <span className="truncate">📍 {customerTownName}</span>
-              <span className="text-emerald-700 font-bold mx-1">─── {distance}km ───</span>
+              <span className="text-emerald-700 font-bold mx-1">─── {distance >= 9999 ? "Pending" : distance < 1 ? "< 1km" : `${distance}km`} ───</span>
               <span className="truncate">⭐ {workerLocationName}</span>
             </div>
           </div>
