@@ -1123,23 +1123,14 @@ export default function WorkerCard({
                 </ActionTooltip>
               </div>
 
-              {/* General Town Area Description / Corridor */}
-              <p className="text-[11px] text-slate-500 truncate flex items-center gap-1">
-                <Navigation className="w-3 h-3 text-slate-400 shrink-0" />
-                <span>
-                  {customerTownName ? `${customerTownName} → ${worker.locationName} Hub` : `${worker.locationName || "Local"} Service Zone`}
-                </span>
-              </p>
-
-              {/* Simplified Grid Coordinates & Interactive Toggle */}
-              <div className="flex items-center justify-between gap-1.5 pt-0.5 flex-wrap">
-                <span className="inline-flex items-center gap-1 font-mono text-[10px] text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200/80 shadow-2xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span className="font-semibold">{t("gridCoordinates")}:</span>
-                  <span className="font-bold text-emerald-900">
-                    {(worker.latitude || 12.917).toFixed(3)}°N, {(worker.longitude || 77.484).toFixed(3)}°E
+              {/* General Town Area Description / Corridor & Mini Map Toggle */}
+              <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                <p className="text-[11px] text-slate-500 truncate flex items-center gap-1 min-w-0 flex-1">
+                  <Navigation className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span className="truncate">
+                    {customerTownName ? `${customerTownName} → ${worker.locationName} Hub` : `${worker.locationName || "Local"} Service Zone`}
                   </span>
-                </span>
+                </p>
 
                 {/* Mini Map Leaflet expand button */}
                 <ActionTooltip label={t("tooltipToggleMap")} position="top">
@@ -1147,7 +1138,7 @@ export default function WorkerCard({
                     type="button"
                     id={`toggle-minimap-${worker.uid}`}
                     onClick={() => setShowMiniMap(!showMiniMap)}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-850 hover:underline cursor-pointer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-850 hover:underline cursor-pointer shrink-0"
                     title={t("tooltipToggleMap")}
                     aria-label={t("tooltipToggleMap")}
                   >
