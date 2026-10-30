@@ -10,25 +10,31 @@ import {
   Copy, 
   Share, 
   MessageCircle,
-  ExternalLink
+  ExternalLink,
+  Package,
+  FileDown,
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useLanguage } from '../context/LanguageContext';
 
 interface PWAInstallButtonProps {
-  variant?: 'header' | 'banner' | 'card';
+  variant?: 'header' | 'banner' | 'card' | 'apk-only' | 'link';
   className?: string;
+  initialTab?: 'qr' | 'apk' | 'guide';
 }
 
 export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ 
   variant = 'header',
-  className = '' 
+  className = '',
+  initialTab
 }) => {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const { language } = useLanguage();
   const [showModal, setShowModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'qr' | 'guide'>('qr');
+  const [activeTab, setActiveTab] = useState<'qr' | 'apk' | 'guide'>(initialTab || 'apk');
   const [isInstalling, setIsInstalling] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
@@ -129,6 +135,22 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
       {/* ------------------------------------------------------------- */}
       {variant === 'header' && (
         <div className="flex items-center gap-1.5">
+          {/* Direct APK Download Button in Header */}
+          <button
+            type="button"
+            id="btn-apk-download-header"
+            data-testid="apk-download-header-button"
+            onClick={() => {
+              setActiveTab('apk');
+              setShowModal(true);
+            }}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition shadow-xs cursor-pointer border border-emerald-500/60"
+            title={language === 'kn' ? 'Android APK ಡೌನ್‌ಲೋಡ್' : 'Download Android APK'}
+          >
+            <Package className="w-3.5 h-3.5 text-emerald-200" />
+            <span className="hidden sm:inline">APK</span>
+          </button>
+
           <button
             type="button"
             id="btn-pwa-install-header"
@@ -164,6 +186,40 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
       )}
 
       {/* ------------------------------------------------------------- */}
+      {/* APK ONLY VARIANT (Standalone button for Hero/Cards)            */}
+      {/* ------------------------------------------------------------- */}
+      {variant === 'apk-only' && (
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('apk');
+            setShowModal(true);
+          }}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-emerald-950 font-black text-xs transition cursor-pointer shadow-md ${className}`}
+        >
+          <Package className="w-4 h-4 text-emerald-950" />
+          <span>{language === 'kn' ? 'Android APK ಡೌನ್‌ಲೋಡ್ (.apk)' : 'Download Android APK (.apk)'}</span>
+        </button>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* LINK VARIANT (Footer or inline link)                          */}
+      {/* ------------------------------------------------------------- */}
+      {variant === 'link' && (
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('apk');
+            setShowModal(true);
+          }}
+          className={`inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 font-bold text-xs underline cursor-pointer ${className}`}
+        >
+          <Package className="w-3.5 h-3.5" />
+          <span>{language === 'kn' ? 'Android APK ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ' : 'Download Android App (APK)'}</span>
+        </button>
+      )}
+
+      {/* ------------------------------------------------------------- */}
       {/* BANNER VARIANT (Mobile / Tablet)                              */}
       {/* ------------------------------------------------------------- */}
       {variant === 'banner' && (
@@ -177,12 +233,24 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
                 {language === 'kn' ? 'ನಮ್ಮ ಕೆಲಸ ಆ್ಯಪ್ ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ' : 'Install Namma Kelasa App'}
               </h4>
               <p className="text-[11px] text-emerald-200 leading-tight mt-0.5">
-                {language === 'kn' ? 'ಮೊಬೈಲ್‌ಗೆ ಲಿಂಕ್ ಹಂಚಿಕೊಳ್ಳಿ ಅಥವಾ ನೇರವಾಗಿ ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ' : 'Share download link or install instantly'}
+                {language === 'kn' ? 'APK ಡೌನ್‌ಲೋಡ್ ಅಥವಾ ನೇರ ಇನ್‌ಸ್ಟಾಲ್' : 'Download APK or install directly'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('apk');
+                setShowModal(true);
+              }}
+              className="p-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white transition cursor-pointer border border-emerald-500/50 flex items-center gap-1 px-2 text-xs font-bold"
+              title="Download APK"
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>APK</span>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -197,7 +265,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
             <button
               type="button"
               onClick={handleInstallClick}
-              className="px-3.5 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-extrabold text-xs transition cursor-pointer shadow-xs active:scale-95"
+              className="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-extrabold text-xs transition cursor-pointer shadow-xs active:scale-95"
             >
               {language === 'kn' ? 'ಇನ್‌ಸ್ಟಾಲ್' : 'Install'}
             </button>
@@ -234,33 +302,115 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
                 : 'Scan the QR code with your phone camera or share via WhatsApp/Link to install instantly.'}
             </p>
 
-            {/* Tab switch: QR / Share vs Install Guide */}
-            <div className="grid grid-cols-2 bg-slate-100 p-1 rounded-2xl mt-4 border border-slate-200 text-xs font-bold">
+            {/* Tab switch: Direct APK vs QR / Share vs Install Guide */}
+            <div className="grid grid-cols-3 bg-slate-100 p-1 rounded-2xl mt-4 border border-slate-200 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setActiveTab('apk')}
+                className={`py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1 ${
+                  activeTab === 'apk'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>{language === 'kn' ? 'APK ಡೌನ್‌ಲೋಡ್' : 'APK File'}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('qr')}
-                className={`py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1 ${
                   activeTab === 'qr'
-                    ? 'bg-white text-emerald-800 shadow-xs'
+                    ? 'bg-emerald-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <QrCode className="w-3.5 h-3.5" />
-                <span>{language === 'kn' ? 'ಸ್ಕ್ಯಾನ್ & ಲಿಂಕ್' : 'Scan & Share'}</span>
+                <span>{language === 'kn' ? 'ಸ್ಕ್ಯಾನ್' : 'Scan / Link'}</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('guide')}
-                className={`py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1 ${
                   activeTab === 'guide'
-                    ? 'bg-white text-emerald-800 shadow-xs'
+                    ? 'bg-emerald-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>{language === 'kn' ? 'ಇನ್‌ಸ್ಟಾಲ್ ವಿವರ' : 'Install Steps'}</span>
+                <span>{language === 'kn' ? 'ವೆಬ್ ಇನ್‌ಸ್ಟಾಲ್' : 'Web App'}</span>
               </button>
             </div>
+
+            {/* Tab 0: Direct Android APK Download */}
+            {activeTab === 'apk' && (
+              <div className="mt-4 space-y-4">
+                {/* APK Card */}
+                <div className="p-4 bg-emerald-50/80 rounded-2xl border border-emerald-200 text-center space-y-3">
+                  <div className="w-12 h-12 bg-emerald-600 rounded-2xl text-white flex items-center justify-center mx-auto shadow-sm">
+                    <Package className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wider border border-emerald-300">
+                      Android Package (.apk)
+                    </div>
+                    <h4 className="text-base font-black text-slate-900 mt-1.5">
+                      Namma Kelasa for Android
+                    </h4>
+                    <p className="text-xs text-slate-600">
+                      {language === 'kn' 
+                        ? 'ಯಾವುದೇ ಪ್ಲೇ ಸ್ಟೋರ್ ಅಗತ್ಯವಿಲ್ಲದೆ ನೇರವಾಗಿ ನಿಮ್ಮ ಆಂಡ್ರಾಯ್ಡ್ ಫೋನ್‌ನಲ್ಲಿ ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ.' 
+                        : 'Direct installation file for Android phones. No Google Play Store required.'}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] font-mono text-slate-600">
+                    <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 font-bold">v1.0.0</span>
+                    <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200">~1.6 MB</span>
+                    <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200">Android 5.0+</span>
+                  </div>
+
+                  {/* Big Direct APK Download Button */}
+                  <a
+                    href="/namma-kelasa.apk"
+                    download="NammaKelasa.apk"
+                    id="btn-download-apk-direct"
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold text-sm transition shadow-md hover:shadow-lg cursor-pointer"
+                  >
+                    <FileDown className="w-4 h-4 text-emerald-200" />
+                    <span>{language === 'kn' ? 'NammaKelasa.apk ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ' : 'Download NammaKelasa.apk'}</span>
+                  </a>
+                </div>
+
+                {/* Android 3-step installation instructions */}
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs text-slate-700 space-y-2.5 text-left">
+                  <h5 className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>{language === 'kn' ? 'ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡುವ ವಿಧಾನ:' : 'How to install the APK on Android:'}</span>
+                  </h5>
+                  <ol className="space-y-2 list-decimal list-inside text-[11px] text-slate-600 leading-relaxed">
+                    <li>
+                      <strong>{language === 'kn' ? 'ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ:' : 'Download:'}</strong>{' '}
+                      {language === 'kn' 
+                        ? 'ಮೇಲಿನ ಹಸಿರು ಬಟನ್ ಒತ್ತಿ NammaKelasa.apk ಫೈಲ್ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ.' 
+                        : 'Tap the green button above to download the APK file.'}
+                    </li>
+                    <li>
+                      <strong>{language === 'kn' ? 'ಫೈಲ್ ತೆರೆಯಿರಿ:' : 'Open:'}</strong>{' '}
+                      {language === 'kn' 
+                        ? 'ಡೌನ್‌ಲೋಡ್ ಮುಗಿದ ನಂತರ ನೋಟಿಫಿಕೇಶನ್ ಅಥವಾ Downloads ಫೋಲ್ಡರ್‌ನಲ್ಲಿ ಫೈಲ್ ತೆರೆಯಿರಿ.' 
+                        : 'Once downloaded, tap the notification or open the file in your Downloads folder.'}
+                    </li>
+                    <li>
+                      <strong>{language === 'kn' ? 'ಇನ್‌ಸ್ಟಾಲ್ ಒತ್ತಿ:' : 'Install:'}</strong>{' '}
+                      {language === 'kn' 
+                        ? '"Install" ಒತ್ತಿ. "Unknown sources" ಸಂದೇಶ ಬಂದರೆ Settings > Allow from this source ಆನ್ ಮಾಡಿ.' 
+                        : 'Tap "Install". If Android prompts "Unknown sources", tap Settings and toggle "Allow from this source".'}
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            )}
 
             {/* Tab 1: QR Code & Sharing Options */}
             {activeTab === 'qr' && (

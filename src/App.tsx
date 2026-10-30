@@ -848,6 +848,9 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 relative shrink-0">
+            {/* Direct APK Download button */}
+            <PWAInstallButton variant="apk-only" />
+
             {workers.length === 0 && (
               <button
                 id="btn-seed-data-hint"
@@ -1165,7 +1168,9 @@ export default function App() {
             <p className="font-bold text-zinc-700">Namma Kelasa • Independent Marketplace © 2026</p>
             <p className="text-[10px] text-zinc-400 mt-1">Namma Kelasa is an independent platform connecting skilled workers with customers across India. Direct hire, fair wages, zero commission.</p>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-4 flex-wrap">
+            <PWAInstallButton variant="link" />
+            <span>•</span>
             <span>Built independently for local workers and customers</span>
           </div>
         </div>

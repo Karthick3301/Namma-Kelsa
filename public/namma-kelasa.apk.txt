@@ -1,0 +1,8 @@
+# Namma Kelasa Android APK File
+# To serve your real generated .apk file:
+# 1. Take the `app-release-signed.apk` (or `NammaKelasa.apk`) generated from your PWABuilder zip.
+# 2. Rename it to `namma-kelasa.apk` and place it in the `public/` directory:
+#    `public/namma-kelasa.apk`
+#
+# Vite, Firebase Hosting, and Vercel automatically serve files in the `public/` folder at the root URL:
+# `https://<your-domain>/namma-kelasa.apk`
