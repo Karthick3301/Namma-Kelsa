@@ -56,6 +56,19 @@ export interface WorkerNotification {
   targetId?: string;
 }
 
+export type UserRole = "customer" | "worker";
+
+export interface UserAccount {
+  uid: string;
+  phoneNumber?: string;
+  email?: string;
+  displayName?: string;
+  photoURL?: string;
+  role: UserRole;
+  createdAt: any;
+  updatedAt: any;
+}
+
 export interface CustomerLocation {
   name: string;
   latitude: number;

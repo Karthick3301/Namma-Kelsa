@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#064e3b" />
+      <stop offset="100%" stop-color="#022c22" />
+    </linearGradient>
+    <linearGradient id="badgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Deep Forest Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Inner Badge Container -->
+  <g filter="url(#shadow)">
+    <rect x="76" y="76" width="360" height="360" rx="84" fill="url(#badgeGrad)" stroke="#34d399" stroke-width="4" stroke-opacity="0.4" />
+  </g>
+
+  <!-- Stylized Monogram NK & Hammer/Sprout Motif -->
+  <!-- Letter N -->
+  <path d="M 148 350 L 148 162 L 192 162 L 256 288 L 256 162 L 292 162 L 292 350 L 248 350 L 184 224 L 184 350 Z" fill="#ffffff" />
+  
+  <!-- Letter K -->
+  <path d="M 312 162 L 348 162 L 348 238 L 404 162 L 448 162 L 376 256 L 452 350 L 406 350 L 348 274 L 348 350 L 312 350 Z" fill="#ffffff" />
+
+  <!-- Artisan Sparkle / Compassion Star -->
+  <g transform="translate(256, 114) scale(0.9)">
+    <path d="M 0 -24 Q 0 0 24 0 Q 0 0 0 24 Q 0 0 -24 0 Q 0 0 0 -24 Z" fill="#fef08a" />
+  </g>
+
+  <!-- Bottom Accent: Fair Wages / Direct Local Tagline Dot -->
+  <circle cx="256" cy="402" r="8" fill="#a7f3d0" />
+</svg>

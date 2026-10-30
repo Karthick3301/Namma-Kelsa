@@ -823,6 +823,22 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
       updatedAt: serverTimestamp()
     };
 
+    // If in demo mode, persist to local storage for realistic preview testing
+    if (uid.startsWith("demo-") || uid.startsWith("mock-")) {
+      try {
+        localStorage.setItem(`namma_kelsa_worker_profile_${uid}`, JSON.stringify(profileData));
+      } catch (e) {
+        // ignore
+      }
+      setSuccessMsg("🎉 Your professional worker identity has been saved successfully (Demo Mode)!");
+      setSaveSuccess(true);
+      onSaveSuccess();
+      setSaving(false);
+      setTimeout(() => setSuccessMsg(""), 4000);
+      setTimeout(() => setSaveSuccess(false), 3000);
+      return;
+    }
+
     try {
       // Security rules will validate exact keys and format
       await setDoc(doc(db, profilePath), profileData);
@@ -831,8 +847,13 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
       onSaveSuccess();
       setTimeout(() => setSuccessMsg(""), 4000);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, profilePath);
+    } catch (err: any) {
+      console.error("Profile save error:", err);
+      setErrorMsg(
+        language === "kn"
+          ? "ಪ್ರೊಫೈಲ್ ಉಳಿಸಲು ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಎಲ್ಲಾ ಅಗತ್ಯ ವಿವರಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೊಮ್ಮೆ ಪ್ರಯತ್ನಿಸಿ."
+          : err?.message || "Failed to save profile. Please check your network and try again."
+      );
     } finally {
       setSaving(false);
     }

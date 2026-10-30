@@ -55,6 +55,66 @@ export default function WorkerDashboard({
     if (!uid) return;
     setLoading(true);
 
+    // If testing in demo mode, populate rich sample profile and reviews
+    if (uid.startsWith("mock-") || uid.startsWith("demo-")) {
+      const demoProfile: WorkerProfile = {
+        uid,
+        name: workerName || "Gurumurthy Swamy",
+        phone: "+91 98765 43210",
+        skills: ["Painting", "Tiling", "Plumbing"],
+        dailyRate: 650,
+        locationName: "Bengaluru, Karnataka",
+        latitude: 12.9716,
+        longitude: 77.5946,
+        isAvailable: true,
+        photo: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=150",
+        imageUrls: [
+          "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600",
+          "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=600"
+        ],
+        gallery: [
+          "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=300"
+        ],
+        experience: 7,
+        about: "Dedicated experienced artisan in Bengaluru specializing in wall finishes, waterproof coating, and rapid tiling repairs with fair daily wages.",
+        createdAt: { seconds: Math.floor(Date.now() / 1000) - 864000, nanoseconds: 0 } as any,
+        updatedAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as any
+      };
+      const sampleReviews: WorkerReview[] = [
+        {
+          id: "demo-r1",
+          workerId: uid,
+          authorName: "Anand R.",
+          authorId: "cust-1",
+          rating: 5,
+          comment: "Punctual, polite, and finished the wall painting job ahead of schedule with zero mess.",
+          createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 2, nanoseconds: 0 } as any
+        },
+        {
+          id: "demo-r2",
+          workerId: uid,
+          authorName: "Pooja Hegde",
+          authorId: "cust-2",
+          rating: 5,
+          comment: "High quality bathroom tile fixing. Fair rate without any broker fee.",
+          createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 5, nanoseconds: 0 } as any
+        },
+        {
+          id: "demo-r3",
+          workerId: uid,
+          authorName: "Karthik N.",
+          authorId: "cust-3",
+          rating: 4,
+          comment: "Good work on kitchen pipes and plumbing. Would recommend to neighbors.",
+          createdAt: { seconds: Math.floor(Date.now() / 1000) - 86400 * 12, nanoseconds: 0 } as any
+        }
+      ];
+      setProfile(demoProfile);
+      setReviews(sampleReviews);
+      setLoading(false);
+      return;
+    }
+
     const reviewsPath = `workers/${uid}/reviews`;
     const unsubReviews = onSnapshot(
       collection(db, reviewsPath),
@@ -69,7 +129,7 @@ export default function WorkerDashboard({
         setLoading(false);
       },
       (err) => {
-        handleFirestoreError(err, OperationType.GET, reviewsPath);
+        console.warn("Reviews dashboard listener notice:", err);
         setLoading(false);
       }
     );
@@ -83,7 +143,7 @@ export default function WorkerDashboard({
         }
       },
       (err) => {
-        handleFirestoreError(err, OperationType.GET, profilePath);
+        console.warn("Profile dashboard listener notice:", err);
       }
     );
 
@@ -91,7 +151,7 @@ export default function WorkerDashboard({
       unsubReviews();
       unsubProfile();
     };
-  }, [uid]);
+  }, [uid, workerName]);
 
   // Metric Computations
   const totalCompletedJobs = reviews.length;

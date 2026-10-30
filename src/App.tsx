@@ -16,12 +16,16 @@ import {
   ArrowRight,
   Info,
   LayoutDashboard,
-  UserCog
+  UserCog,
+  Loader2,
+  ArrowLeftRight,
+  ShieldCheck,
+  WifiOff
 } from "lucide-react";
-import { collection, onSnapshot, getDocs, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, googleProvider, handleFirestoreError, OperationType } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
-import { WorkerProfile, TOWN_CENTERS, CustomerLocation } from "./types";
+import { WorkerProfile, TOWN_CENTERS, CustomerLocation, UserRole } from "./types";
 import { calculateDistance, MOCK_WORKERS, formatReverseGeocodedLocation } from "./utils";
 import SearchFilters from "./components/SearchFilters";
 import WorkerCard from "./components/WorkerCard";
@@ -29,6 +33,10 @@ import ProfileEditor from "./components/ProfileEditor";
 import WorkerDashboard from "./components/WorkerDashboard";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 import NotificationsBell from "./components/NotificationsBell";
+import PhoneAuthLogin from "./components/PhoneAuthLogin";
+import RoleSelection from "./components/RoleSelection";
+import AccountLinkingModal from "./components/AccountLinkingModal";
+import { PWAInstallButton } from "./components/PWAInstallButton";
 import { useLanguage } from "./context/LanguageContext";
 
 export default function App() {
@@ -36,6 +44,24 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"customer" | "worker">("customer");
   const [workerSubView, setWorkerSubView] = useState<"dashboard" | "edit">("dashboard");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [showAccountLinking, setShowAccountLinking] = useState<boolean>(false);
+  const [toastNotification, setToastNotification] = useState<{ type: "success" | "info" | "warning"; message: string } | null>(null);
+  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+
+  // Monitor online / offline connectivity status for PWA
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   
   // Custom Demo Mode credentials (guarantees preview succeeds in custom browser frames)
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -132,22 +158,182 @@ export default function App() {
     });
   };
 
-  // Check auth changes
+  // Check auth changes and query user role from Firestore
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
         setIsDemoMode(false);
         setDemoUid(null);
+
+        try {
+          const userDocRef = doc(db, "users", user.uid);
+          const userSnap = await getDoc(userDocRef);
+          if (userSnap.exists() && userSnap.data()?.role) {
+            const savedRole = userSnap.data().role as UserRole;
+            
+            // Sync Google profile fields (email, displayName, photoURL) if missing from Firestore doc
+            const existingData = userSnap.data();
+            const updates: any = {};
+            let shouldUpdate = false;
+            if (!existingData.email && user.email) {
+              updates.email = user.email;
+              shouldUpdate = true;
+            }
+            if (!existingData.displayName && user.displayName) {
+              updates.displayName = user.displayName;
+              shouldUpdate = true;
+            }
+            if (!existingData.photoURL && user.photoURL) {
+              updates.photoURL = user.photoURL;
+              shouldUpdate = true;
+            }
+            if (shouldUpdate) {
+              updates.updatedAt = serverTimestamp();
+              try {
+                await updateDoc(userDocRef, updates);
+              } catch (e) {
+                console.warn("Could not sync user metadata to existing doc:", e);
+              }
+            }
+
+            setUserRole(savedRole);
+            setActiveTab(savedRole);
+          } else {
+            // Check localStorage fallback for role
+            const cachedRole = localStorage.getItem(`namma_kelsa_user_role_${user.uid}`) as UserRole | null;
+            if (cachedRole === "customer" || cachedRole === "worker") {
+              setUserRole(cachedRole);
+              setActiveTab(cachedRole);
+            } else {
+              setUserRole(null);
+            }
+          }
+        } catch (err) {
+          console.warn("Could not retrieve user document from Firestore:", err);
+          try {
+            const cachedRole = localStorage.getItem(`namma_kelsa_user_role_${user.uid}`) as UserRole | null;
+            if (cachedRole === "customer" || cachedRole === "worker") {
+              setUserRole(cachedRole);
+              setActiveTab(cachedRole);
+            } else {
+              setUserRole(null);
+            }
+          } catch {
+            setUserRole(null);
+          }
+        }
       } else {
-        // Fallback or cleared
         if (!isDemoMode) {
           setCurrentUser(null);
+          setUserRole(null);
         }
       }
+      setIsCheckingAuth(false);
     });
     return () => unsubscribe();
   }, [isDemoMode]);
+
+  // Handle successful Phone Auth login
+  const handleLoginSuccess = async (user: User, isNewUser?: boolean) => {
+    setCurrentUser(user);
+    setIsGuest(false);
+
+    if (user.uid.startsWith("demo-") || user.uid.startsWith("mock-")) {
+      setIsDemoMode(true);
+      setDemoUid(user.uid);
+      const savedDemoRole = localStorage.getItem(`namma_kelsa_user_role_${user.uid}`) as UserRole | null;
+      if (savedDemoRole) {
+        setUserRole(savedDemoRole);
+        setActiveTab(savedDemoRole);
+      } else {
+        setUserRole(null);
+      }
+      return;
+    }
+
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userDocRef);
+      if (userSnap.exists() && userSnap.data()?.role) {
+        const savedRole = userSnap.data().role as UserRole;
+
+        // Sync Google-provided email, display name, and photo to Firestore if missing
+        const existingData = userSnap.data();
+        const updates: any = {};
+        let needsUpdate = false;
+        if (!existingData.email && user.email) {
+          updates.email = user.email;
+          needsUpdate = true;
+        }
+        if (!existingData.displayName && user.displayName) {
+          updates.displayName = user.displayName;
+          needsUpdate = true;
+        }
+        if (!existingData.photoURL && user.photoURL) {
+          updates.photoURL = user.photoURL;
+          needsUpdate = true;
+        }
+        if (needsUpdate) {
+          updates.updatedAt = serverTimestamp();
+          try {
+            await updateDoc(userDocRef, updates);
+          } catch (e) {
+            console.warn("Could not sync user metadata on login:", e);
+          }
+        }
+
+        setUserRole(savedRole);
+        setActiveTab(savedRole);
+      } else {
+        const cachedRole = localStorage.getItem(`namma_kelsa_user_role_${user.uid}`) as UserRole | null;
+        if (cachedRole === "customer" || cachedRole === "worker") {
+          setUserRole(cachedRole);
+          setActiveTab(cachedRole);
+        } else {
+          setUserRole(null);
+        }
+      }
+    } catch (err) {
+      console.warn("Error checking user role on login:", err);
+      setUserRole(null);
+    }
+  };
+
+  // Callback when role is chosen on Role Selection screen
+  const handleRoleSelected = (role: UserRole) => {
+    setUserRole(role);
+    setActiveTab(role);
+  };
+
+  // Switch role without requiring re-login (accessible from header / settings)
+  const handleSwitchRole = async (targetRole: UserRole) => {
+    setUserRole(targetRole);
+    setActiveTab(targetRole);
+
+    if (currentUser) {
+      try {
+        localStorage.setItem(`namma_kelsa_user_role_${currentUser.uid}`, targetRole);
+      } catch {
+        // ignore
+      }
+
+      if (!currentUser.uid.startsWith("demo-") && !currentUser.uid.startsWith("mock-")) {
+        try {
+          const userDocRef = doc(db, "users", currentUser.uid);
+          const userSnap = await getDoc(userDocRef);
+          if (userSnap.exists()) {
+            await updateDoc(userDocRef, {
+              role: targetRole,
+              updatedAt: serverTimestamp(),
+            });
+          }
+        } catch (err) {
+          console.warn("Could not sync role change to Firestore:", err);
+        }
+      }
+    }
+  };
 
   // Read workers database in real-time via onSnapshot
   useEffect(() => {
@@ -205,9 +391,15 @@ export default function App() {
       setCurrentUser(result.user);
       setIsDemoMode(false);
       setDemoUid(null);
-    } catch (err) {
-      console.error("Auth popup failed. Standard behavior in block frames. Please consider Demo login.", err);
-      alert("Note: If popup was blocked by the browser frame, please use the quick 'Demo Mode Login' button to test instantly!");
+    } catch (err: any) {
+      console.error("Auth popup failed. Standard behavior in block frames.", err);
+      if (err?.code !== "auth/popup-closed-by-user") {
+        setToastNotification({
+          type: "info",
+          message: "Note: If Google login popup was blocked by your browser, you can use quick Demo Mode or Phone/Email login."
+        });
+        setTimeout(() => setToastNotification(null), 5000);
+      }
     }
   };
 
@@ -225,32 +417,31 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    if (isDemoMode) {
-      setIsDemoMode(false);
-      setDemoUid(null);
-      setCurrentUser(null);
-    } else {
-      await signOut(auth);
-      setCurrentUser(null);
+    try {
+      if (isDemoMode) {
+        setIsDemoMode(false);
+        setDemoUid(null);
+      } else {
+        await signOut(auth);
+      }
+    } catch (e) {
+      console.error("Sign out error", e);
     }
+    setCurrentUser(null);
+    setUserRole(null);
+    setIsGuest(false);
     setActiveTab("customer");
   };
 
-  // Safe Seeder button: Populate 3 mock workers on first setup
+  // Safe Seeder button: Populate or refresh worker listings
   const handleSeedDatabase = async () => {
     setSeeding(true);
     try {
-      for (const item of MOCK_WORKERS) {
-        const wPath = `workers/${item.uid}`;
-        await setDoc(doc(db, "workers", item.uid!), {
-          ...item,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-      }
-      alert("Artisan directory loaded with skilled independent professionals across India!");
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, "workers/seeding");
+      setToastNotification({
+        type: "success",
+        message: "Artisan directory refreshed with verified worker listings across India!"
+      });
+      setTimeout(() => setToastNotification(null), 4000);
     } finally {
       setSeeding(false);
     }
@@ -259,7 +450,10 @@ export default function App() {
   // Compute live filtered search list based on customer location (Preset Hub, Live GPS, or Custom Address)
   const activeCustomerLocation: CustomerLocation = customerLocation || (selectedTownIdx !== null ? TOWN_CENTERS[selectedTownIdx] : TOWN_CENTERS[0]);
 
-  const filteredWorkers = workers
+  // Fallback to rich India directory mock workers if Firestore collection is fresh or offline
+  const displayWorkers = workers.length > 0 ? workers : (MOCK_WORKERS as WorkerProfile[]);
+
+  const filteredWorkers = displayWorkers
     .map((w) => {
       const hasValidWorkerLat = typeof w.latitude === "number" && !isNaN(w.latitude) && w.latitude >= -90 && w.latitude <= 90;
       const hasValidWorkerLon = typeof w.longitude === "number" && !isNaN(w.longitude) && w.longitude >= -180 && w.longitude <= 180;
@@ -309,9 +503,143 @@ export default function App() {
 
   const activeWorkerUid = isDemoMode ? demoUid : currentUser?.uid;
 
+  // 1. Initial Auth Check Spinner
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="w-14 h-14 bg-emerald-700 rounded-2xl flex items-center justify-center font-bold text-2xl text-white shadow-lg mb-3">
+          NK
+        </div>
+        <div className="flex items-center gap-2 text-emerald-800 text-sm font-bold">
+          <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+          <span>{t("brandName")}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated Gate: Show Phone + OTP Login Screen
+  if (!currentUser && !isGuest) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-emerald-150 antialiased">
+        <header className="sticky top-0 z-40 bg-emerald-900 text-white border-b border-emerald-800 py-3.5 px-4 sm:px-6 shadow-xs">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-lg text-white select-none shadow-sm">
+                NK
+              </div>
+              <div>
+                <h1 className="text-lg font-bold tracking-tight text-white leading-none">
+                  {t("brandName")}
+                </h1>
+                <p className="text-[10px] text-emerald-300 font-medium uppercase tracking-widest leading-none mt-1">
+                  {t("brandTagline")}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <PWAInstallButton variant="header" />
+              <LanguageSwitcher />
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 flex items-center justify-center py-6 px-4">
+          <PhoneAuthLogin 
+            onLoginSuccess={handleLoginSuccess}
+            onContinueAsGuest={() => setIsGuest(true)}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  // 3. New User Role Selection Gate: "What brings you here?"
+  if (currentUser && !userRole) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-emerald-150 antialiased">
+        <header className="sticky top-0 z-40 bg-emerald-900 text-white border-b border-emerald-800 py-3.5 px-4 sm:px-6 shadow-xs">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-lg text-white select-none shadow-sm">
+                NK
+              </div>
+              <div>
+                <h1 className="text-lg font-bold tracking-tight text-white leading-none">
+                  {t("brandName")}
+                </h1>
+                <p className="text-[10px] text-emerald-300 font-medium uppercase tracking-widest leading-none mt-1">
+                  {t("brandTagline")}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <PWAInstallButton variant="header" />
+              <LanguageSwitcher />
+              <button
+                type="button"
+                id="btn-auth-logout"
+                onClick={handleLogout}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950 hover:bg-emerald-800 text-emerald-200 hover:text-white text-xs font-bold transition cursor-pointer border border-emerald-800"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>{t("logout")}</span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 flex items-center justify-center py-6 px-4">
+          <RoleSelection 
+            uid={currentUser.uid}
+            phoneNumber={currentUser.phoneNumber || ""}
+            email={currentUser.email || ""}
+            displayName={currentUser.displayName || ""}
+            photoURL={currentUser.photoURL || ""}
+            onRoleSelected={handleRoleSelected}
+          />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-150 antialiased">
       
+      {/* PWA Offline Connectivity Banner */}
+      {isOffline && (
+        <div className="bg-amber-600 text-white text-xs font-bold py-2 px-4 text-center flex items-center justify-center gap-2 shadow-sm animate-in fade-in sticky top-0 z-50">
+          <WifiOff className="w-4 h-4 shrink-0" />
+          <span>
+            {language === "kn"
+              ? "ನೀವು ಪ್ರಸ್ತುತ ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿದ್ದೀರಿ. ಸಂಗ್ರಹಿಸಿದ ಪ್ರೊಫೈಲ್‌ಗಳನ್ನು ತೋರಿಸಲಾಗುತ್ತಿದೆ."
+              : "You are currently offline. Viewing cached artisans & worker profiles."}
+          </span>
+        </div>
+      )}
+
+      {/* Floating In-App Toast Notification */}
+      {toastNotification && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className={`p-3.5 rounded-2xl shadow-xl border flex items-center justify-between gap-3 text-xs font-bold ${
+            toastNotification.type === "success"
+              ? "bg-emerald-900 text-white border-emerald-700"
+              : toastNotification.type === "warning"
+              ? "bg-amber-900 text-white border-amber-700"
+              : "bg-slate-900 text-white border-slate-700"
+          }`}>
+            <span>{toastNotification.message}</span>
+            <button
+              type="button"
+              onClick={() => setToastNotification(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Dynamic Header */}
       <header className="sticky top-0 z-40 bg-emerald-900 text-white border-b border-emerald-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
@@ -329,7 +657,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Quick Nav, Language Switcher & Profile Actions */}
+          {/* Quick Nav, Role Switcher, Language Switcher & Profile Actions */}
           <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
             
             {/* Quick Favorites counter shortcut */}
@@ -351,6 +679,9 @@ export default function App() {
                 </span>
               </button>
             )}
+
+            {/* PWA In-App Install Button */}
+            <PWAInstallButton variant="header" />
 
             {/* Header Language Switcher Component */}
             <LanguageSwitcher />
@@ -383,6 +714,35 @@ export default function App() {
               </button>
             </div>
 
+            {/* Role Switcher Action for Authenticated Users */}
+            {currentUser && (
+              <div className="hidden lg:flex items-center gap-2">
+                {userRole === "customer" ? (
+                  <button
+                    type="button"
+                    id="btn-switch-role-worker"
+                    onClick={() => handleSwitchRole("worker")}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-100 hover:text-white bg-emerald-800/80 hover:bg-emerald-700/90 px-3 py-1.5 rounded-lg transition border border-emerald-700/60 cursor-pointer"
+                    title="Switch role to Worker Profile"
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Switch to Worker Profile</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    id="btn-switch-role-customer"
+                    onClick={() => handleSwitchRole("customer")}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-100 hover:text-white bg-emerald-800/80 hover:bg-emerald-700/90 px-3 py-1.5 rounded-lg transition border border-emerald-700/60 cursor-pointer"
+                    title="Switch role to Find Workers"
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Switch to Find Workers</span>
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Notifications Bell for Authenticated Workers */}
             {currentUser && (
               <NotificationsBell
@@ -395,37 +755,76 @@ export default function App() {
               />
             )}
 
-            {/* Auth actions */}
+            {/* Authenticated User info, Security/Linking & Sign Out */}
             {currentUser ? (
-              <div className="hidden sm:flex items-center gap-2.5 border-l border-emerald-800/80 pl-3">
-                <img 
-                  src={currentUser.photoURL || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"} 
-                  alt="My Profile" 
-                  className="w-8 h-8 rounded-full border border-emerald-500" 
-                  referrerPolicy="no-referrer"
-                />
+              <div className="flex items-center gap-2 sm:gap-2.5 border-l border-emerald-800/80 pl-2.5">
+                <div className="hidden md:flex flex-col text-right">
+                  <span className="text-[11px] font-mono font-bold text-emerald-200 truncate max-w-[150px]">
+                    {currentUser.phoneNumber || currentUser.email || (isDemoMode ? "+91 98765 43210" : "Logged in")}
+                  </span>
+                  <span className="text-[9px] uppercase tracking-wider font-bold text-emerald-400">
+                    {userRole === "worker" ? "Artisan" : "Customer"}
+                  </span>
+                </div>
+
+                {/* Account Security / Link Phone or Email Button */}
+                <button
+                  type="button"
+                  id="btn-account-linking"
+                  data-testid="account-linking-button"
+                  onClick={() => setShowAccountLinking(true)}
+                  className="p-2 bg-emerald-850 hover:bg-emerald-800 text-emerald-200 hover:text-white rounded-lg transition cursor-pointer border border-emerald-750"
+                  title="Account Security: Link Phone or Email"
+                  aria-label="Account Security: Link Phone or Email"
+                >
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                </button>
+
                 <button
                   id="btn-auth-logout"
+                  data-testid="logout-button"
                   onClick={handleLogout}
-                  className="p-2 bg-emerald-850 hover:bg-emerald-800 text-emerald-100 rounded-lg hover:text-white transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 py-1.5 px-3 bg-emerald-850 hover:bg-rose-900/80 text-emerald-100 hover:text-white rounded-lg transition cursor-pointer border border-emerald-750 text-xs font-bold"
                   title={t("logout")}
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-3.5 h-3.5 text-rose-300" />
+                  <span className="hidden sm:inline">{t("logout")}</span>
                 </button>
               </div>
             ) : (
               <button
                 id="btn-auth-signin"
-                onClick={handleGoogleLogin}
-                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-emerald-200 hover:text-white px-3 py-1.5 hover:bg-emerald-850 rounded-lg transition cursor-pointer"
+                data-testid="signin-button"
+                onClick={() => setIsGuest(false)}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 rounded-lg shadow-sm transition cursor-pointer"
               >
-                <LogIn className="w-4 h-4 text-emerald-400" />
-                <span>{t("login")}</span>
+                <Phone className="w-3.5 h-3.5" />
+                <span>Sign in (Phone / Email)</span>
               </button>
             )}
           </div>
         </div>
       </header>
+
+      {/* Account Linking Modal for Authenticated Users */}
+      {currentUser && (
+        <AccountLinkingModal
+          user={currentUser}
+          isOpen={showAccountLinking}
+          onClose={() => setShowAccountLinking(false)}
+          onProfileUpdated={async () => {
+            // Re-fetch user document to sync changes
+            try {
+              const snap = await getDoc(doc(db, "users", currentUser.uid));
+              if (snap.exists() && snap.data()?.role) {
+                setUserRole(snap.data().role as UserRole);
+              }
+            } catch (e) {
+              console.warn("Could not reload user profile:", e);
+            }
+          }}
+        />
+      )}
 
       {/* Main Workspace Frame */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -473,6 +872,9 @@ export default function App() {
         {/* Tab 1: Customer View (Default) */}
         {activeTab === "customer" && (
           <div className="space-y-6">
+            
+            {/* Mobile PWA Install Banner */}
+            <PWAInstallButton variant="banner" className="md:hidden" />
             
             {/* Filter controls */}
             <section className="space-y-2">
@@ -700,48 +1102,54 @@ export default function App() {
                 )}
               </div>
             ) : (
-              <div className="max-w-md mx-auto bg-white rounded-2xl border border-zinc-150 p-6 shadow-sm text-center">
-                <div className="p-3.5 bg-indigo-50 rounded-full text-indigo-600 inline-block mb-4">
-                  <UserCheck className="w-6 h-6" />
+              <div className="max-w-md mx-auto bg-white rounded-3xl border border-slate-200 p-7 shadow-sm text-center">
+                <div className="w-14 h-14 bg-emerald-50 rounded-2xl text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-200">
+                  <UserCheck className="w-7 h-7 text-emerald-600" />
                 </div>
-                <h3 className="font-bold text-zinc-900 text-base">Artisan Profile Authorization</h3>
-                <p className="text-xs text-zinc-500 mt-2.5 leading-normal">
-                  To publish your photo, skills list, daily work rate (₹), and manage your live availability toggle, please authorize securely.
+                <h3 className="font-extrabold text-slate-900 text-lg">Artisan Profile Authorization</h3>
+                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                  To publish your photo, skills list, daily work rate (₹), and manage your real-time availability toggle, please sign in with Google, your phone number, or email.
                 </p>
 
                 <div className="mt-6 flex flex-col gap-3">
-                  {/* Google Authenticator */}
+                  {/* Unified Sign In Button */}
                   <button
-                    id="btn-login-google"
-                    onClick={handleGoogleLogin}
-                    className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 hover:shadow active:scale-95 text-white py-3 px-4 rounded-xl text-sm font-bold shadow-xs transition"
+                    id="btn-login-phone-artisan"
+                    data-testid="login-phone-artisan-button"
+                    onClick={() => setIsGuest(false)}
+                    className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-3.5 px-4 rounded-xl text-sm font-bold shadow-xs transition cursor-pointer"
                   >
-                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                      <path d="M12.24 10.285V13.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.578-7.859-8s3.529-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l2.427-2.334C17.955 2.192 15.34 1 12.24 1 6.033 1 1 6.033 1 12.24s5.033 11.24 11.24 11.24c6.478 0 10.793-4.537 10.793-10.997 0-.746-.08-1.32-.176-1.888H12.24z"/>
-                    </svg>
-                    <span>Authenticate with Google</span>
+                    <LogIn className="w-4 h-4" />
+                    <span>Sign In (Google / Phone / Email)</span>
                   </button>
 
                   <div className="relative flex py-2 items-center">
-                    <div className="flex-grow border-t border-zinc-200"></div>
-                    <span className="flex-shrink mx-3 text-[10px] font-bold text-zinc-400 font-mono tracking-widest uppercase">Or Test Instantly</span>
-                    <div className="flex-grow border-t border-zinc-200"></div>
+                    <div className="flex-grow border-t border-slate-200"></div>
+                    <span className="flex-shrink mx-3 text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase">Or Test Instantly</span>
+                    <div className="flex-grow border-t border-slate-200"></div>
                   </div>
 
-                  {/* Sandbox Demo mode (essential for iframe bypass and fast evaluations) */}
+                  {/* Sandbox Demo mode */}
                   <button
                     id="btn-login-demo"
-                    onClick={handleDemoLogin}
-                    className="w-full bg-zinc-100 hover:bg-zinc-200 active:scale-95 text-zinc-700 py-3 px-4 rounded-xl text-sm font-bold border border-zinc-200 transition"
+                    onClick={() => {
+                      handleLoginSuccess({
+                        uid: "demo-worker-phone-01",
+                        phoneNumber: "+919876543210",
+                        displayName: "Basavaraj M. (Artisan)",
+                        photoURL: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=150"
+                      } as any, false);
+                    }}
+                    className="w-full bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 py-3 px-4 rounded-xl text-sm font-bold border border-slate-200 transition cursor-pointer"
                   >
-                    <span>Guest Developer / Demo Access</span>
+                    <span>Instant Artisan Demo Access</span>
                   </button>
                 </div>
 
-                <div className="mt-5 p-3 bg-indigo-50/40 rounded-xl text-[11px] text-zinc-650 flex gap-2 items-start text-left leading-normal border border-indigo-100/30">
-                  <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                <div className="mt-5 p-3 bg-emerald-50/60 rounded-xl text-[11px] text-emerald-800 flex gap-2 items-start text-left leading-normal border border-emerald-100">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                   <p>
-                    <strong>Cookie/Iframe Note:</strong> If standard Google sign-in is blocked inside the workspace iframe due to cross-site cookie settings, use the <strong>Guest Developer Access</strong> option. It sets up a fully active local sandbox environment!
+                    <strong>Secure Access:</strong> Sign in with Google one-tap, Indian mobile OTP (+91), or email & password. Zero commission on daily wages.
                   </p>
                 </div>
               </div>

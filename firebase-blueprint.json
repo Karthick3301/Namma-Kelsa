@@ -147,9 +147,56 @@
         }
       },
       "required": ["workerId", "customerName", "message", "createdAt"]
+    },
+    "User": {
+      "title": "User Account",
+      "description": "User profile with their phone number, email, selected role (customer or worker), and account metadata.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user."
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "Phone number with country code (e.g. +91XXXXXXXXXX) if linked or provided."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user if signed up with email or linked."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Full display name of the user from Google profile or manual registration."
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Avatar photo URL from Google Sign-In or profile picture."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["customer", "worker"],
+          "description": "Active role of the user: 'customer' (hiring) or 'worker' (looking for work)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the user account was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the user account or role was last updated."
+        }
+      },
+      "required": ["uid", "role", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user accounts storing role and phone authentication data."
+    },
     "/workers/{workerId}": {
       "schema": "Worker",
       "description": "Collection of skilled worker digital identities."
