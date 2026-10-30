@@ -177,7 +177,9 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
       console.error("Firebase Phone Auth error:", err);
       let message = "Failed to send OTP. Please try again.";
 
-      if (err.code === "auth/invalid-phone-number") {
+      if (err.code === "auth/unauthorized-domain") {
+        message = "Unauthorized domain. Please add your Vercel domain to Firebase Console > Authentication > Settings > Authorized domains.";
+      } else if (err.code === "auth/invalid-phone-number") {
         message = "Invalid phone number format. Please check the 10-digit number.";
       } else if (err.code === "auth/too-many-requests") {
         message = "Too many OTP requests. Please wait a few minutes before trying again.";
@@ -432,6 +434,8 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
         setErrorMessage(
           `An account already exists with ${existingEmail || "this email"}. Enter your password below to securely link your Google login to this existing account.`
         );
+      } else if (err.code === "auth/unauthorized-domain") {
+        setErrorMessage("Unauthorized domain. Please add your Vercel domain to Firebase Console > Authentication > Settings > Authorized domains.");
       } else if (err.code === "auth/popup-closed-by-user") {
         // Closed by user, no error needed
       } else if (err.code === "auth/popup-blocked") {
