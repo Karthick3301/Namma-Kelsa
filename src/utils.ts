@@ -755,7 +755,7 @@ export function areNearDuplicateStrings(strA: string | undefined | null, strB: s
     return true;
   }
 
-  // Known historical & bilingual Indian city aliases
+  // Known historical & multilingual Indian city aliases
   const knownAliases: [string, string][] = [
     ["bangalore", "bengaluru"],
     ["mysore", "mysuru"],

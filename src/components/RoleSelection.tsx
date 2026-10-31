@@ -92,17 +92,14 @@ export default function RoleSelection({
       }
       onRoleSelected(selectedRole);
     } catch (err) {
-      console.error("Failed to save user role:", err);
-      setError(
-        language === "kn"
-          ? "ಖಾತೆಯನ್ನು ಉಳಿಸಲು ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೊಮ್ಮೆ ಪ್ರಯತ್ನಿಸಿ."
-          : "Failed to save your role. Please try again."
-      );
+      console.warn("Could not save user role to Firestore, persisting to local cache:", err);
       try {
-        handleFirestoreError(err, OperationType.WRITE, `users/${uid}`);
-      } catch {
-        // Logged
+        localStorage.setItem(`namma_kelsa_user_role_${uid}`, selectedRole);
+      } catch (e) {
+        // ignore
       }
+      // Proceed gracefully so user is never trapped
+      onRoleSelected(selectedRole);
     } finally {
       setSaving(false);
     }

@@ -175,10 +175,14 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
       }, 150);
     } catch (err: any) {
       console.error("Firebase Phone Auth error:", err);
+      const errStr = `${err?.code || ""} ${err?.message || ""} ${String(err)}`.toLowerCase();
       let message = "Failed to send OTP. Please try again.";
 
-      if (err.code === "auth/unauthorized-domain") {
-        message = "Unauthorized domain. Please add your Vercel domain to Firebase Console > Authentication > Settings > Authorized domains.";
+      if (errStr.includes("unauthorized-domain")) {
+        const hostname = typeof window !== "undefined" ? window.location.hostname : "your domain";
+        message = language === "kn"
+          ? `ಅನಧಿಕೃತ ಡೊಮೈನ್ (${hostname}). ದಯವಿಟ್ಟು Firebase Console > Authentication > Settings > Authorized domains ನಲ್ಲಿ "${hostname}" ಸೇರಿಸಿ.`
+          : `Domain "${hostname}" is not authorized in Firebase Console. Add "${hostname}" in Firebase Console > Authentication > Settings > Authorized domains, or tap Instant Demo Mode below.`;
       } else if (err.code === "auth/invalid-phone-number") {
         message = "Invalid phone number format. Please check the 10-digit number.";
       } else if (err.code === "auth/too-many-requests") {
@@ -358,9 +362,13 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
       }
     } catch (err: any) {
       console.error("Firebase Email Auth error:", err);
+      const errStr = `${err?.code || ""} ${err?.message || ""} ${String(err)}`.toLowerCase();
       let message = "Authentication failed. Please check your credentials.";
 
-      if (err.code === "auth/email-already-in-use") {
+      if (errStr.includes("unauthorized-domain")) {
+        const hostname = typeof window !== "undefined" ? window.location.hostname : "your domain";
+        message = `Domain "${hostname}" is not authorized in Firebase Console. Add "${hostname}" in Firebase Console > Authentication > Settings > Authorized domains, or tap Instant Demo Mode below.`;
+      } else if (err.code === "auth/email-already-in-use") {
         message = "This email address is already in use. Please switch to Log In or reset your password.";
       } else if (err.code === "auth/invalid-email") {
         message = "Invalid email format. Please check the address.";
@@ -426,6 +434,7 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
       onLoginSuccess(user, false);
     } catch (err: any) {
       console.error("Google Sign-In Error:", err);
+      const errStr = `${err?.code || ""} ${err?.message || ""} ${String(err)}`.toLowerCase();
       if (err.code === "auth/account-exists-with-different-credential") {
         const existingEmail = err.customData?.email || "";
         const pendingCred = GoogleAuthProvider.credentialFromError(err);
@@ -434,8 +443,13 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
         setErrorMessage(
           `An account already exists with ${existingEmail || "this email"}. Enter your password below to securely link your Google login to this existing account.`
         );
-      } else if (err.code === "auth/unauthorized-domain") {
-        setErrorMessage("Unauthorized domain. Please add your Vercel domain to Firebase Console > Authentication > Settings > Authorized domains.");
+      } else if (errStr.includes("unauthorized-domain")) {
+        const hostname = typeof window !== "undefined" ? window.location.hostname : "your domain";
+        setErrorMessage(
+          language === "kn"
+            ? `ಅನಧಿಕೃತ ಡೊಮೈನ್ (${hostname}). ದಯವಿಟ್ಟು Firebase Console > Authentication > Settings > Authorized domains ನಲ್ಲಿ "${hostname}" ಸೇರಿಸಿ. ಅಥವಾ ಕೆಳಗಿನ ಡೆಮೊ ಬಟನ್ ಬಳಸಿ.`
+            : `Domain "${hostname}" is not authorized in Firebase Console. Add "${hostname}" in Firebase Console > Authentication > Settings > Authorized domains, or tap Instant Demo Mode below.`
+        );
       } else if (err.code === "auth/popup-closed-by-user") {
         // Closed by user, no error needed
       } else if (err.code === "auth/popup-blocked") {
@@ -731,9 +745,23 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
 
               {/* Feedback Banners */}
               {errorMessage && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium flex items-start gap-2 animate-in fade-in">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-                  <span>{errorMessage}</span>
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs font-medium space-y-2 animate-in fade-in">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                    <span className="leading-relaxed">{errorMessage}</span>
+                  </div>
+                  {errorMessage.toLowerCase().includes("domain") && (
+                    <div className="pt-2 border-t border-rose-200/80 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] text-rose-600 font-semibold">Bypass & test immediately:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDemoAccess("customer")}
+                        className="text-[11px] font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 px-3 py-1.5 rounded-lg transition shadow-2xs cursor-pointer"
+                      >
+                        ⚡ Continue as Demo User
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 

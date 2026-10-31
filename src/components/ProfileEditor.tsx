@@ -880,6 +880,30 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto flex-wrap">
+          {/* Quick Header Save Button */}
+          <button
+            type="button"
+            id="btn-header-save-profile"
+            onClick={(e) => {
+              handleSubmit(e as any);
+            }}
+            disabled={saving}
+            className={`flex items-center gap-1.5 font-bold text-xs px-3.5 py-2 rounded-xl transition cursor-pointer shadow-xs ${
+              saveSuccess
+                ? "bg-emerald-600 text-white"
+                : "bg-emerald-700 hover:bg-emerald-800 text-white active:scale-95"
+            }`}
+          >
+            {saving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : saveSuccess ? (
+              <Check className="w-3.5 h-3.5" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            <span>{saving ? t("savingProfile") : saveSuccess ? t("profileSaved") : t("saveProfile")}</span>
+          </button>
+
           {/* Printable QR Code Button for Offline Marketing */}
           <button
             type="button"
@@ -1969,6 +1993,32 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
                 <span>{t("saveProfile")}</span>
               </>
             )}
+          </button>
+        </div>
+
+        {/* Sticky Bottom Save Bar (Always visible while scrolling) */}
+        <div className="sticky bottom-3 z-30 bg-emerald-950/95 backdrop-blur-md text-white rounded-2xl p-3 px-4 shadow-xl border border-emerald-800 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isAvailable ? 'bg-emerald-400' : 'bg-slate-400'}`} />
+            <div className="truncate">
+              <span className="text-xs font-bold text-white truncate block">{name || "Your Profile"}</span>
+              <span className="text-[10px] text-emerald-300 font-mono">₹{dailyRate}/day • {skills.length} skills</span>
+            </div>
+          </div>
+          <button
+            type="submit"
+            id="btn-sticky-save-profile"
+            disabled={saving}
+            className="flex items-center gap-1.5 font-bold text-xs px-4 py-2 bg-emerald-500 hover:bg-emerald-400 active:scale-95 disabled:opacity-50 text-emerald-950 rounded-xl transition cursor-pointer shrink-0 shadow-xs"
+          >
+            {saving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : saveSuccess ? (
+              <Check className="w-3.5 h-3.5" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            <span>{saving ? t("savingProfile") : saveSuccess ? t("profileSaved") : t("saveProfile")}</span>
           </button>
         </div>
       </form>

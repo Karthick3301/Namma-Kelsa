@@ -126,7 +126,7 @@ service cloud.firestore {
           (incoming().diff(existing()).affectedKeys().hasOnly(['unavailableDates', 'updatedAt'])) ||
           (incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'unavailableDates', 'updatedAt'])) ||
           // Action 2: Update complete profile details
-          (incoming().diff(existing()).affectedKeys().hasAny(['name', 'phone', 'skills', 'dailyRate', 'locationName', 'latitude', 'longitude', 'photo', 'gallery', 'imageUrls', 'experience', 'about', 'unavailableDates', 'updatedAt']))
+          (incoming().diff(existing()).affectedKeys().hasAny(['name', 'phone', 'skills', 'dailyRate', 'locationName', 'latitude', 'longitude', 'photo', 'gallery', 'imageUrls', 'skillProficiencies', 'experience', 'about', 'unavailableDates', 'updatedAt']))
         );
 
       allow delete: if isOwner(workerId) && isValidId(workerId);

@@ -9,18 +9,18 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 > **Direct Hire • Fair Wages • Zero Commission**  
-> An open, community-driven marketplace connecting skilled local trade workers (electricians, plumbers, carpenters, painters, drivers, house cleaners, mechanics) directly with customers across Karnataka & India. Available in **ಕನ್ನಡ (Kannada)** and **English**.
+> An open, community-driven marketplace connecting skilled local trade workers (electricians, plumbers, carpenters, painters, drivers, house cleaners, mechanics) directly with customers across Karnataka & India. Full multilingual support across **ಕನ್ನಡ (Kannada)**, **English**, **தமிழ் (Tamil)**, **తెలుగు (Telugu)**, and **हिन्दी (Hindi)**.
 
 ---
 
 ## 🌟 Key Features
 
-- 🇮🇳 **Bilingual First**: Seamless 1-tap switching between **ಕನ್ನಡ (Kannada)** and **English** across all screens, forms, and alerts.
+- 🌐 **Multilingual Support**: Seamless 1-tap switching between 5 languages: **ಕನ್ನಡ (Kannada)**, **English**, **தமிழ் (Tamil)**, **తెలుగు (Telugu)**, and **हिन्दी (Hindi)** across all screens, forms, search, and alerts.
 - 🤝 **Zero-Commission Direct Connect**: Customers contact workers directly via phone call or formatted WhatsApp messages—no cuts taken from hard-working tradespeople.
 - 📍 **Interactive Map & Radius Search**: Leaflet + OpenStreetMap integration allowing customers to locate skilled trade pros near their live GPS coordinates.
-- 📱 **PWA & Standalone Android APK**: 
-  - Installable as a Progressive Web App directly from mobile browsers.
-  - In-app direct download for the standalone Android APK (`/namma-kelasa.apk`) with QR code sharing and step-by-step install guide.
+- 📱 **Progressive Web App (PWA)**: 
+  - Installable directly from mobile browsers (Chrome, Safari) with 1 tap.
+  - Built-in QR code sharing, WhatsApp direct invite, and full offline caching.
 - 🔐 **Dual Authentication**:
   - **Phone OTP Authentication** via Firebase (ideal for Indian mobile users without active email).
   - **Google One-Tap Sign-In** for fast authentication.
@@ -43,7 +43,7 @@
 | **Backend & Database** | [Firebase v12](https://firebase.google.com/) (Authentication & Cloud Firestore) |
 | **Maps & Geolocation** | [Leaflet](https://leafletjs.com/) with OpenStreetMap tiles |
 | **PDF & QR Utilities** | [jsPDF](https://github.com/parallax/jsPDF), [QRCode](https://github.com/soldair/node-qrcode) |
-| **Mobile / PWA** | `vite-plugin-pwa`, Web App Manifest, Service Worker, Android TWA packaging |
+| **Mobile / PWA** | `vite-plugin-pwa`, Web App Manifest, Service Worker |
 
 ---
 
@@ -54,8 +54,6 @@
 │   ├── favicon.ico
 │   ├── icon.svg
 │   ├── manifest.json              # Web App Manifest for mobile install
-│   ├── namma-kelasa.apk           # Standalone Android APK for direct download
-│   ├── namma-kelasa.apk.txt       # Instructions for placing signed APK builds
 │   ├── pwa-192x192.png            # PWA icons
 │   ├── pwa-512x512.png
 │   └── service-worker.js          # Offline cache & asset worker
@@ -63,10 +61,10 @@
 │   ├── components/                # Modular UI components
 │   │   ├── AuthModal.tsx          # Phone OTP & Google Login modal
 │   │   ├── Header.tsx             # Navigation & language switcher
-│   │   ├── Hero.tsx               # Banner with search & direct APK download
+│   │   ├── Hero.tsx               # Banner with search & trade category filters
 │   │   ├── InvoiceModal.tsx       # jsPDF invoice/receipt generator
 │   │   ├── MapView.tsx            # Leaflet interactive map with pro pins
-│   │   ├── PWAInstallButton.tsx   # PWA prompt & Android APK modal with QR code
+│   │   ├── PWAInstallButton.tsx   # PWA install prompt & mobile sharing QR modal
 │   │   ├── WorkerCard.tsx         # Pro showcase card with direct call/WhatsApp
 │   │   └── WorkerProfileModal.tsx # Full portfolio & booking modal
 │   ├── context/                   # React Contexts (Language, Auth)
@@ -150,7 +148,7 @@ This means your deployment URL has not yet been whitelisted in Firebase Authenti
 4. Click **Add domain** and enter your production and staging domains:
    - `localhost`
    - `nma-kelsa.vercel.app` (or your custom domain)
-5. Save changes. Phone OTP and Google Sign-In will now work seamlessly across both web and mobile APK!
+5. Save changes. Phone OTP and Google Sign-In will now work seamlessly across both desktop and mobile PWA!
 
 ---
 
@@ -186,15 +184,20 @@ This means your deployment URL has not yet been whitelisted in Firebase Authenti
 
 ---
 
-## 📱 Android APK & TWA Packaging
+## 📱 Progressive Web App (PWA) Mobile Installation
 
-Namma Kelasa is configured for standalone Android distribution via **Trusted Web Activity (TWA)**:
-1. Generate an Android package using [PWABuilder](https://www.pwabuilder.com/) or Bubblewrap CLI pointing to your live URL (e.g., `https://nma-kelsa.vercel.app`).
-2. After downloading the signed release `.apk`, copy it into the `public/` directory:
-   ```bash
-   cp /path/to/signed-release.apk public/namma-kelasa.apk
-   ```
-3. Users can now tap **"Download Android APK"** on the website to download and install the app directly on their phones.
+Namma Kelasa is a fully compliant Progressive Web App that installs natively on phones without requiring an APK file:
+
+### On Android (Chrome)
+1. Open your live deployment URL (e.g. `https://nma-kelsa.vercel.app`) in Google Chrome.
+2. Tap the **"Install App"** button in the header, or tap the three dots menu (**`⋮`**) in the top right corner.
+3. Select **"Install app"** (or **"Add to Home screen"**).
+4. The app icon will appear on your home screen and run standalone with offline support!
+
+### On iOS (Safari)
+1. Open the website in Safari on your iPhone/iPad.
+2. Tap the **Share** button (box with an upward arrow) at the bottom.
+3. Scroll down and tap **"Add to Home Screen"**.
 
 ---
 

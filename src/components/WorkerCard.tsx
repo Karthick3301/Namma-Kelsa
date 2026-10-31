@@ -200,6 +200,17 @@ export default function WorkerCard({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Synchronize authenticated user state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (user?.displayName && !reviewerName) {
+        setReviewerName(user.displayName);
+      }
+    });
+    return () => unsubscribe();
+  }, [reviewerName]);
+
   const formatDisplayPhone = (rawPhone: string): string => {
     const cleaned = (rawPhone || "").trim();
     const digits = cleaned.replace(/\D/g, "");

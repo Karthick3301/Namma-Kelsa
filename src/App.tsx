@@ -437,6 +437,7 @@ export default function App() {
   const handleSeedDatabase = async () => {
     setSeeding(true);
     try {
+      setWorkers(MOCK_WORKERS as WorkerProfile[]);
       setToastNotification({
         type: "success",
         message: "Artisan directory refreshed with verified worker listings across India!"
@@ -848,7 +849,7 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 relative shrink-0">
-            {/* Direct APK Download button */}
+            {/* PWA Install button */}
             <PWAInstallButton variant="apk-only" />
 
             {workers.length === 0 && (
