@@ -392,13 +392,22 @@ export const NotificationsBell: React.FC<NotificationsBellProps> = ({
         )}
       </button>
 
-      {/* Notifications Popover Dropdown */}
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div
+          className="sm:hidden fixed inset-0 bg-black/50 backdrop-blur-[1px] z-40 animate-in fade-in duration-150"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Notifications Popover Dropdown (Bottom sheet on mobile, anchored dropdown on desktop) */}
       {isOpen && (
         <div
           ref={dropdownRef}
           id="header-notifications-dropdown"
           data-testid="header-notifications-dropdown"
-          className="absolute right-0 mt-2.5 w-84 sm:w-96 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden text-slate-800 animate-in fade-in zoom-in-95 duration-150"
+          className="fixed inset-x-3 bottom-3 sm:inset-auto sm:absolute sm:right-0 sm:mt-2.5 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 overflow-hidden text-slate-800 animate-in fade-in slide-in-from-bottom-2 sm:slide-in-from-top-1 sm:zoom-in-95 duration-150"
         >
           {/* Header */}
           <div className="p-3.5 bg-gradient-to-r from-emerald-900 to-emerald-950 text-white flex items-center justify-between">
@@ -447,7 +456,7 @@ export const NotificationsBell: React.FC<NotificationsBellProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab("all")}
-              className={`flex-1 py-1 px-2 rounded-lg font-bold text-[11px] transition cursor-pointer text-center ${
+              className={`flex-1 py-1 px-1.5 sm:px-2 rounded-lg font-bold text-[11px] transition cursor-pointer text-center whitespace-nowrap ${
                 activeTab === "all"
                   ? "bg-white text-emerald-800 shadow-2xs border border-slate-200 font-extrabold"
                   : "text-slate-600 hover:text-slate-900"
@@ -458,31 +467,31 @@ export const NotificationsBell: React.FC<NotificationsBellProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab("inquiries")}
-              className={`flex-1 py-1 px-2 rounded-lg font-bold text-[11px] transition cursor-pointer flex items-center justify-center gap-1 ${
+              className={`flex-1 py-1 px-1.5 sm:px-2 rounded-lg font-bold text-[11px] transition cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap ${
                 activeTab === "inquiries"
                   ? "bg-white text-emerald-800 shadow-2xs border border-slate-200 font-extrabold"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              <MessageSquare className="w-3 h-3 text-emerald-600" />
+              <MessageSquare className="w-3 h-3 text-emerald-600 shrink-0" />
               <span>Inquiries ({notifications.filter(n => n.type === "inquiry").length})</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("reviews")}
-              className={`flex-1 py-1 px-2 rounded-lg font-bold text-[11px] transition cursor-pointer flex items-center justify-center gap-1 ${
+              className={`flex-1 py-1 px-1.5 sm:px-2 rounded-lg font-bold text-[11px] transition cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap ${
                 activeTab === "reviews"
                   ? "bg-white text-emerald-800 shadow-2xs border border-slate-200 font-extrabold"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+              <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />
               <span>Reviews ({notifications.filter(n => n.type === "review").length})</span>
             </button>
           </div>
 
           {/* Notification Items List */}
-          <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+          <div className="max-h-[50vh] sm:max-h-72 overflow-y-auto divide-y divide-slate-100">
             {filteredNotifications.length === 0 ? (
               <div className="py-8 px-4 text-center">
                 <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center mb-2">
@@ -525,7 +534,7 @@ export const NotificationsBell: React.FC<NotificationsBellProps> = ({
                           <h4 className="text-xs font-bold text-slate-900 truncate">
                             {notif.title}
                           </h4>
-                          <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap flex items-center gap-0.5">
+                          <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap flex items-center gap-0.5 shrink-0">
                             <Clock className="w-2.5 h-2.5" />
                             {formatTimeAgo(notif.createdAt)}
                           </span>
@@ -556,7 +565,7 @@ export const NotificationsBell: React.FC<NotificationsBellProps> = ({
 
                         {/* Additional Action or Details */}
                         <div className="mt-2 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {notif.customerPhone && (
                               <a
                                 href={`tel:${notif.customerPhone}`}
@@ -588,7 +597,7 @@ export const NotificationsBell: React.FC<NotificationsBellProps> = ({
                             type="button"
                             onClick={(e) => deleteNotification(e, notif.id)}
                             title="Dismiss notification"
-                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                            className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer shrink-0"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -607,7 +616,7 @@ export const NotificationsBell: React.FC<NotificationsBellProps> = ({
           </div>
 
           {/* Quick Simulation / Test Alert Footer */}
-          <div className="p-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 text-[10px]">
+          <div className="p-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2 text-[10px]">
             <span className="text-slate-400 flex items-center gap-1 font-mono uppercase font-bold text-[9px]">
               <Sparkles className="w-3 h-3 text-emerald-600" />
               <span>Simulate alerts:</span>

@@ -36,7 +36,6 @@ import NotificationsBell from "./components/NotificationsBell";
 import PhoneAuthLogin from "./components/PhoneAuthLogin";
 import RoleSelection from "./components/RoleSelection";
 import AccountLinkingModal from "./components/AccountLinkingModal";
-import { PWAInstallButton } from "./components/PWAInstallButton";
 import { useLanguage } from "./context/LanguageContext";
 
 export default function App() {
@@ -523,23 +522,22 @@ export default function App() {
   if (!currentUser && !isGuest) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-emerald-150 antialiased">
-        <header className="sticky top-0 z-40 bg-emerald-900 text-white border-b border-emerald-800 py-3.5 px-4 sm:px-6 shadow-xs">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-lg text-white select-none shadow-sm">
+        <header className="sticky top-0 z-40 bg-emerald-900 text-white border-b border-emerald-800 py-3 px-3.5 sm:px-6 shadow-xs">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-base sm:text-lg text-white select-none shadow-sm shrink-0">
                 NK
               </div>
-              <div>
-                <h1 className="text-lg font-bold tracking-tight text-white leading-none">
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-white leading-none truncate">
                   {t("brandName")}
                 </h1>
-                <p className="text-[10px] text-emerald-300 font-medium uppercase tracking-widest leading-none mt-1">
+                <p className="text-[9px] sm:text-[10px] text-emerald-300 font-medium uppercase tracking-widest leading-none mt-1 truncate">
                   {t("brandTagline")}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2.5">
-              <PWAInstallButton variant="header" />
+            <div className="flex items-center gap-2 shrink-0">
               <LanguageSwitcher />
             </div>
           </div>
@@ -559,32 +557,32 @@ export default function App() {
   if (currentUser && !userRole) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-emerald-150 antialiased">
-        <header className="sticky top-0 z-40 bg-emerald-900 text-white border-b border-emerald-800 py-3.5 px-4 sm:px-6 shadow-xs">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-lg text-white select-none shadow-sm">
+        <header className="sticky top-0 z-40 bg-emerald-900 text-white border-b border-emerald-800 py-3 px-3.5 sm:px-6 shadow-xs">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-base sm:text-lg text-white select-none shadow-sm shrink-0">
                 NK
               </div>
-              <div>
-                <h1 className="text-lg font-bold tracking-tight text-white leading-none">
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-white leading-none truncate">
                   {t("brandName")}
                 </h1>
-                <p className="text-[10px] text-emerald-300 font-medium uppercase tracking-widest leading-none mt-1">
+                <p className="text-[9px] sm:text-[10px] text-emerald-300 font-medium uppercase tracking-widest leading-none mt-1 truncate">
                   {t("brandTagline")}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2.5">
-              <PWAInstallButton variant="header" />
+            <div className="flex items-center gap-2 shrink-0">
               <LanguageSwitcher />
               <button
                 type="button"
                 id="btn-auth-logout"
                 onClick={handleLogout}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950 hover:bg-emerald-800 text-emerald-200 hover:text-white text-xs font-bold transition cursor-pointer border border-emerald-800"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-950 hover:bg-emerald-800 text-emerald-200 hover:text-white text-xs font-bold transition cursor-pointer border border-emerald-800"
+                title={t("logout")}
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>{t("logout")}</span>
+                <span className="hidden sm:inline">{t("logout")}</span>
               </button>
             </div>
           </div>
@@ -643,24 +641,24 @@ export default function App() {
 
       {/* Dynamic Header */}
       <header className="sticky top-0 z-40 bg-emerald-900 text-white border-b border-emerald-800 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-xl text-white select-none shadow-sm shrink-0">
+        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-3 flex flex-wrap lg:flex-nowrap items-center justify-between gap-x-2.5 gap-y-2.5">
+          {/* Brand */}
+          <div className="order-1 flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-lg sm:text-xl text-white select-none shadow-sm shrink-0">
               NK
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-white leading-none">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white leading-none truncate">
                 {t("brandName")}
               </h1>
-              <p className="text-[10px] text-emerald-300 font-medium uppercase tracking-widest leading-none mt-1">
+              <p className="text-[9px] sm:text-[10px] text-emerald-300 font-medium uppercase tracking-widest leading-none mt-1 truncate">
                 {t("brandTagline")}
               </p>
             </div>
           </div>
 
-          {/* Quick Nav, Role Switcher, Language Switcher & Profile Actions */}
-          <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
-            
+          {/* Top-Right on Mobile (< lg): Quick Favorites + Language Switcher */}
+          <div className="order-2 lg:ml-auto flex items-center gap-2 shrink-0">
             {/* Quick Favorites counter shortcut */}
             {favorites.length > 0 && (
               <button
@@ -681,18 +679,18 @@ export default function App() {
               </button>
             )}
 
-            {/* PWA In-App Install Button */}
-            <PWAInstallButton variant="header" />
-
             {/* Header Language Switcher Component */}
             <LanguageSwitcher />
+          </div>
 
+          {/* Navigation Tabs, Role Switcher, Notifications & Account Actions */}
+          <div className="order-3 w-full lg:w-auto flex items-center justify-between lg:justify-end gap-2 pt-2 lg:pt-0 border-t border-emerald-800/70 lg:border-t-0">
             {/* View Tab Toggle */}
-            <div className="bg-emerald-950 p-1 rounded-xl flex items-center border border-emerald-850/60">
+            <div className="bg-emerald-950 p-1 rounded-xl flex items-center border border-emerald-850/60 min-w-0">
               <button
                 id="tab-view-customer"
                 onClick={() => setActiveTab("customer")}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition cursor-pointer whitespace-nowrap ${
                   activeTab === "customer"
                     ? "bg-emerald-500 text-white shadow-xs"
                     : "text-emerald-200 hover:text-white"
@@ -705,7 +703,7 @@ export default function App() {
                 onClick={() => {
                   setActiveTab("worker");
                 }}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition cursor-pointer whitespace-nowrap ${
                   activeTab === "worker"
                     ? "bg-emerald-500 text-white shadow-xs"
                     : "text-emerald-200 hover:text-white"
@@ -715,94 +713,97 @@ export default function App() {
               </button>
             </div>
 
-            {/* Role Switcher Action for Authenticated Users */}
-            {currentUser && (
-              <div className="hidden lg:flex items-center gap-2">
-                {userRole === "customer" ? (
-                  <button
-                    type="button"
-                    id="btn-switch-role-worker"
-                    onClick={() => handleSwitchRole("worker")}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-100 hover:text-white bg-emerald-800/80 hover:bg-emerald-700/90 px-3 py-1.5 rounded-lg transition border border-emerald-700/60 cursor-pointer"
-                    title="Switch role to Worker Profile"
-                  >
-                    <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-300" />
-                    <span>Switch to Worker Profile</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    id="btn-switch-role-customer"
-                    onClick={() => handleSwitchRole("customer")}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-100 hover:text-white bg-emerald-800/80 hover:bg-emerald-700/90 px-3 py-1.5 rounded-lg transition border border-emerald-700/60 cursor-pointer"
-                    title="Switch role to Find Workers"
-                  >
-                    <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-300" />
-                    <span>Switch to Find Workers</span>
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Notifications Bell for Authenticated Workers */}
-            {currentUser && (
-              <NotificationsBell
-                workerUid={currentUser.uid}
-                workerName={currentUser.displayName || "Worker"}
-                onNavigateToWorkerProfile={() => {
-                  setActiveTab("worker");
-                  setWorkerSubView("dashboard");
-                }}
-              />
-            )}
-
-            {/* Authenticated User info, Security/Linking & Sign Out */}
-            {currentUser ? (
-              <div className="flex items-center gap-2 sm:gap-2.5 border-l border-emerald-800/80 pl-2.5">
-                <div className="hidden md:flex flex-col text-right">
-                  <span className="text-[11px] font-mono font-bold text-emerald-200 truncate max-w-[150px]">
-                    {currentUser.phoneNumber || currentUser.email || (isDemoMode ? "+91 98765 43210" : "Logged in")}
-                  </span>
-                  <span className="text-[9px] uppercase tracking-wider font-bold text-emerald-400">
-                    {userRole === "worker" ? "Artisan" : "Customer"}
-                  </span>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Role Switcher Action for Authenticated Users */}
+              {currentUser && (
+                <div className="hidden xl:flex items-center gap-2">
+                  {userRole === "customer" ? (
+                    <button
+                      type="button"
+                      id="btn-switch-role-worker"
+                      onClick={() => handleSwitchRole("worker")}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-100 hover:text-white bg-emerald-800/80 hover:bg-emerald-700/90 px-3 py-1.5 rounded-lg transition border border-emerald-700/60 cursor-pointer"
+                      title="Switch role to Worker Profile"
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-300" />
+                      <span>Switch to Worker Profile</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      id="btn-switch-role-customer"
+                      onClick={() => handleSwitchRole("customer")}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-100 hover:text-white bg-emerald-800/80 hover:bg-emerald-700/90 px-3 py-1.5 rounded-lg transition border border-emerald-700/60 cursor-pointer"
+                      title="Switch role to Find Workers"
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-300" />
+                      <span>Switch to Find Workers</span>
+                    </button>
+                  )}
                 </div>
+              )}
 
-                {/* Account Security / Link Phone or Email Button */}
-                <button
-                  type="button"
-                  id="btn-account-linking"
-                  data-testid="account-linking-button"
-                  onClick={() => setShowAccountLinking(true)}
-                  className="p-2 bg-emerald-850 hover:bg-emerald-800 text-emerald-200 hover:text-white rounded-lg transition cursor-pointer border border-emerald-750"
-                  title="Account Security: Link Phone or Email"
-                  aria-label="Account Security: Link Phone or Email"
-                >
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                </button>
+              {/* Notifications Bell for Authenticated Workers */}
+              {currentUser && (
+                <NotificationsBell
+                  workerUid={currentUser.uid}
+                  workerName={currentUser.displayName || "Worker"}
+                  onNavigateToWorkerProfile={() => {
+                    setActiveTab("worker");
+                    setWorkerSubView("dashboard");
+                  }}
+                />
+              )}
 
+              {/* Authenticated User info, Security/Linking & Sign Out */}
+              {currentUser ? (
+                <div className="flex items-center gap-1.5 sm:gap-2.5 border-l border-emerald-800/80 pl-2 sm:pl-2.5">
+                  <div className="hidden md:flex flex-col text-right">
+                    <span className="text-[11px] font-mono font-bold text-emerald-200 truncate max-w-[150px]">
+                      {currentUser.phoneNumber || currentUser.email || (isDemoMode ? "+91 98765 43210" : "Logged in")}
+                    </span>
+                    <span className="text-[9px] uppercase tracking-wider font-bold text-emerald-400">
+                      {userRole === "worker" ? "Artisan" : "Customer"}
+                    </span>
+                  </div>
+
+                  {/* Account Security / Link Phone or Email Button */}
+                  <button
+                    type="button"
+                    id="btn-account-linking"
+                    data-testid="account-linking-button"
+                    onClick={() => setShowAccountLinking(true)}
+                    className="p-2 bg-emerald-850 hover:bg-emerald-800 text-emerald-200 hover:text-white rounded-lg transition cursor-pointer border border-emerald-750"
+                    title="Account Security: Link Phone or Email"
+                    aria-label="Account Security: Link Phone or Email"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  </button>
+
+                  <button
+                    id="btn-auth-logout"
+                    data-testid="logout-button"
+                    onClick={handleLogout}
+                    className="inline-flex items-center gap-1.5 py-1.5 px-2.5 sm:px-3 bg-emerald-850 hover:bg-rose-900/80 text-emerald-100 hover:text-white rounded-lg transition cursor-pointer border border-emerald-750 text-xs font-bold"
+                    title={t("logout")}
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-rose-300" />
+                    <span className="hidden sm:inline">{t("logout")}</span>
+                  </button>
+                </div>
+              ) : (
                 <button
-                  id="btn-auth-logout"
-                  data-testid="logout-button"
-                  onClick={handleLogout}
-                  className="inline-flex items-center gap-1.5 py-1.5 px-3 bg-emerald-850 hover:bg-rose-900/80 text-emerald-100 hover:text-white rounded-lg transition cursor-pointer border border-emerald-750 text-xs font-bold"
-                  title={t("logout")}
+                  id="btn-auth-signin"
+                  data-testid="signin-button"
+                  onClick={() => setIsGuest(false)}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-3 sm:px-3.5 py-1.5 rounded-lg shadow-sm transition cursor-pointer whitespace-nowrap"
                 >
-                  <LogOut className="w-3.5 h-3.5 text-rose-300" />
-                  <span className="hidden sm:inline">{t("logout")}</span>
+                  <Phone className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Sign in (Phone / Email)</span>
+                  <span className="sm:hidden">{t("login")}</span>
                 </button>
-              </div>
-            ) : (
-              <button
-                id="btn-auth-signin"
-                data-testid="signin-button"
-                onClick={() => setIsGuest(false)}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 rounded-lg shadow-sm transition cursor-pointer"
-              >
-                <Phone className="w-3.5 h-3.5" />
-                <span>Sign in (Phone / Email)</span>
-              </button>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -828,10 +829,10 @@ export default function App() {
       )}
 
       {/* Main Workspace Frame */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
         
         {/* Independent Marketplace Hero Banner */}
-        <div className="bg-emerald-950 text-emerald-100 rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 border border-emerald-900">
+        <div className="bg-emerald-950 text-emerald-100 rounded-2xl p-4 sm:p-6 md:p-7 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6 border border-emerald-900">
           <div className="absolute right-0 bottom-0 opacity-10 stroke-emerald-100 max-w-[200px] pointer-events-none select-none">
             <Building className="w-64 h-64" />
           </div>
@@ -849,9 +850,6 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 relative shrink-0">
-            {/* PWA Install button */}
-            <PWAInstallButton variant="apk-only" />
-
             {workers.length === 0 && (
               <button
                 id="btn-seed-data-hint"
@@ -877,20 +875,17 @@ export default function App() {
         {activeTab === "customer" && (
           <div className="space-y-6">
             
-            {/* Mobile PWA Install Banner */}
-            <PWAInstallButton variant="banner" className="md:hidden" />
-            
             {/* Filter controls */}
             <section className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-zinc-500 font-mono">Marketplace Filter & Search</h3>
+                  <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-zinc-500 font-mono">Marketplace Filter & Search</h3>
                   <p className="text-xs text-zinc-400">Specify search parameters instantly</p>
                 </div>
                 {workers.length > 0 && (
                   <button 
                     onClick={handleSeedDatabase} 
-                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 py-1.5 px-2.5 rounded-lg transition"
+                    className="self-start sm:self-auto text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 py-1.5 px-2.5 rounded-lg transition cursor-pointer shrink-0"
                   >
                     Refresh / Re-seed Sandbox
                   </button>
@@ -917,9 +912,9 @@ export default function App() {
 
             {/* Live Search results list */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h3 className="font-bold text-zinc-900 text-base flex items-center gap-2">
+                  <h3 className="font-bold text-zinc-900 text-sm sm:text-base flex items-center gap-2">
                     {showFavoritesOnly ? (
                       <>
                         <Heart className="w-4 h-4 fill-rose-500 text-rose-500" />
@@ -935,7 +930,7 @@ export default function App() {
                       : t("liveDatabaseSync")}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 font-mono text-xs text-zinc-500 bg-zinc-100 px-3 py-1 rounded-lg">
+                <div className="self-start sm:self-auto flex items-center gap-2 font-mono text-[11px] sm:text-xs text-zinc-500 bg-zinc-100 px-2.5 sm:px-3 py-1 rounded-lg shrink-0">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -1004,7 +999,7 @@ export default function App() {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                   {filteredWorkers.map((worker) => (
                     <WorkerCard
                       key={worker.uid}
@@ -1062,29 +1057,29 @@ export default function App() {
                 </div>
 
                 {/* Sub-navigation tabs: Performance Dashboard vs Edit Profile */}
-                <div className="flex items-center gap-2 p-1.5 bg-white rounded-2xl max-w-fit border border-slate-200 shadow-2xs">
+                <div className="flex items-center gap-1.5 sm:gap-2 p-1.5 bg-white rounded-2xl w-full sm:w-auto sm:max-w-fit border border-slate-200 shadow-2xs">
                   <button
                     id="btn-worker-dashboard-view"
                     onClick={() => setWorkerSubView("dashboard")}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
                       workerSubView === "dashboard"
                         ? "bg-emerald-600 text-white shadow-xs"
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                     }`}
                   >
-                    <LayoutDashboard className="w-3.5 h-3.5" />
+                    <LayoutDashboard className="w-3.5 h-3.5 shrink-0" />
                     <span>Performance Dashboard</span>
                   </button>
                   <button
                     id="btn-worker-edit-view"
                     onClick={() => setWorkerSubView("edit")}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
                       workerSubView === "edit"
                         ? "bg-emerald-600 text-white shadow-xs"
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                     }`}
                   >
-                    <UserCog className="w-3.5 h-3.5" />
+                    <UserCog className="w-3.5 h-3.5 shrink-0" />
                     <span>Edit Profile & Rates</span>
                   </button>
                 </div>
@@ -1170,8 +1165,6 @@ export default function App() {
             <p className="text-[10px] text-zinc-400 mt-1">Namma Kelasa is an independent platform connecting skilled workers with customers across India. Direct hire, fair wages, zero commission.</p>
           </div>
           <div className="flex items-center gap-4 flex-wrap">
-            <PWAInstallButton variant="link" />
-            <span>•</span>
             <span>Built independently for local workers and customers</span>
           </div>
         </div>

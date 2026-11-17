@@ -492,7 +492,7 @@ export default function SearchFilters({
   };
 
   return (
-    <div id="search-filters-container" className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 shadow-sm">
+    <div id="search-filters-container" className="bg-white rounded-2xl border border-slate-200 p-3.5 sm:p-5 space-y-3.5 sm:space-y-4 shadow-sm">
       {/* Top Search Bar */}
       <div className="relative flex items-center">
         <Search className="absolute left-3.5 w-4 h-4 text-slate-400" />
@@ -522,21 +522,18 @@ export default function SearchFilters({
         id="compact-location-bar"
         data-testid="compact-location-bar"
         onClick={() => setShowLocationModal(true)}
-        className="bg-emerald-50/70 hover:bg-emerald-50 border border-emerald-200/90 hover:border-emerald-300 rounded-xl p-3 flex items-center justify-between gap-3 transition cursor-pointer group shadow-2xs"
+        className="bg-emerald-50/70 hover:bg-emerald-50 border border-emerald-200/90 hover:border-emerald-300 rounded-xl p-2.5 sm:p-3 flex items-center justify-between gap-2.5 sm:gap-3 transition cursor-pointer group shadow-2xs"
       >
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
             <MapPin className="w-4 h-4 fill-white text-white" />
           </div>
           <div className="min-w-0 flex-1">
-            <span className="block text-[10px] font-mono uppercase font-bold text-emerald-800 tracking-wider">
-              {t("locationHubLabel") || "Your Location"}
-            </span>
-            <div className="flex items-center gap-1.5 truncate">
-              <span className="text-sm font-extrabold text-slate-900 truncate">
-                {currentLocationName}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-mono uppercase font-bold text-emerald-800 tracking-wider">
+                {t("locationHubLabel") || "Your Location"}
               </span>
-              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wider shrink-0 ${
+              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-sm uppercase tracking-wider shrink-0 ${
                 locationSource === "live"
                   ? "bg-blue-100 text-blue-800 border border-blue-200"
                   : locationSource === "custom"
@@ -546,6 +543,9 @@ export default function SearchFilters({
                 {locationSource === "live" ? "Live GPS" : locationSource === "custom" ? "Custom" : "City Hub"}
               </span>
             </div>
+            <p className="text-xs sm:text-sm font-extrabold text-slate-900 truncate mt-0.5">
+              {currentLocationName}
+            </p>
           </div>
         </div>
 
@@ -557,7 +557,7 @@ export default function SearchFilters({
             e.stopPropagation();
             setShowLocationModal(true);
           }}
-          className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-white group-hover:bg-emerald-700 group-hover:text-white border border-emerald-300 group-hover:border-emerald-700 px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0 cursor-pointer"
+          className="flex items-center gap-1 sm:gap-1.5 text-xs font-bold text-emerald-700 bg-white group-hover:bg-emerald-700 group-hover:text-white border border-emerald-300 group-hover:border-emerald-700 px-2.5 sm:px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0 cursor-pointer"
         >
           <span>Change</span>
           <ChevronRight className="w-3.5 h-3.5" />
@@ -1148,12 +1148,12 @@ export default function SearchFilters({
         </div>
 
         {/* Real-time Availability & My Favorites filter toggles */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap w-full lg:w-auto">
           <button
             id="filter-switch-availability"
             type="button"
             onClick={() => setOnlyAvailable(!onlyAvailable)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border whitespace-nowrap ${
               onlyAvailable 
                 ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" 
                 : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
@@ -1176,7 +1176,7 @@ export default function SearchFilters({
             data-testid="filter-my-favorites-button"
             type="button"
             onClick={() => setShowFavoritesOnly && setShowFavoritesOnly(!showFavoritesOnly)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border whitespace-nowrap ${
               showFavoritesOnly
                 ? "bg-rose-600 text-white border-rose-600 shadow-xs ring-2 ring-rose-200"
                 : "bg-white text-slate-700 border-slate-200 hover:border-rose-200 hover:text-rose-700"

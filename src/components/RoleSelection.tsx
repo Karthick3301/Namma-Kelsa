@@ -111,11 +111,11 @@ export default function RoleSelection({
   const displayPhoto = photoURL || auth.currentUser?.photoURL;
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center py-8 px-4 sm:px-6">
+    <div className="min-h-[80vh] flex items-center justify-center py-4 sm:py-8 px-2 sm:px-6">
       <div className="w-full max-w-xl bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header Banner */}
-        <div className="bg-emerald-900 text-white p-6 sm:p-8 text-center relative overflow-hidden">
+        <div className="bg-emerald-900 text-white p-5 sm:p-8 text-center relative overflow-hidden">
           {displayPhoto ? (
             <img
               src={displayPhoto}
@@ -163,7 +163,7 @@ export default function RoleSelection({
         </div>
 
         {/* Role Options */}
-        <div className="p-6 sm:p-8 space-y-4">
+        <div className="p-4 sm:p-8 space-y-4">
           
           {error && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium">

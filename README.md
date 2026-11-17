@@ -64,7 +64,6 @@
 │   │   ├── Hero.tsx               # Banner with search & trade category filters
 │   │   ├── InvoiceModal.tsx       # jsPDF invoice/receipt generator
 │   │   ├── MapView.tsx            # Leaflet interactive map with pro pins
-│   │   ├── PWAInstallButton.tsx   # PWA install prompt & mobile sharing QR modal
 │   │   ├── WorkerCard.tsx         # Pro showcase card with direct call/WhatsApp
 │   │   └── WorkerProfileModal.tsx # Full portfolio & booking modal
 │   ├── context/                   # React Contexts (Language, Auth)

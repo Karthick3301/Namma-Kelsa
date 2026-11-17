@@ -159,6 +159,7 @@ export default function WorkerCard({
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [showReviewsList, setShowReviewsList] = useState(false);
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(auth.currentUser);
   const [showMiniMap, setShowMiniMap] = useState(false);
 
@@ -729,7 +730,7 @@ export default function WorkerCard({
       className="relative flex flex-col justify-between bg-white rounded-2xl border border-slate-200 hover:border-slate-300 shadow-xs transition-all duration-300 hover:shadow-md overflow-hidden"
     >
       {/* Availability Pulsing Banner at the top */}
-      <div className={`flex items-center justify-between px-4 py-2.5 text-xs font-bold tracking-wide border-b ${
+      <div className={`flex items-center justify-between gap-2 px-3 sm:px-4 py-2 text-xs font-bold tracking-wide border-b ${
         isAvailableToday 
           ? "bg-emerald-50 text-emerald-800 border-emerald-100/40" 
           : isMarkedBusyToday
@@ -757,219 +758,22 @@ export default function WorkerCard({
                 : t("notAvailableToday")}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-mono">
-          <span className="hidden sm:inline flex items-center gap-1">
-            <Clock className="w-3" /> {t("updatedRecently")}
-          </span>
-          <ActionTooltip label={t("tooltipShare")} position="bottom">
-            <button
-              type="button"
-              id={`share-quick-btn-${worker.uid}`}
-              onClick={() => handleShareProfile(true)}
-              title={t("tooltipShare")}
-              aria-label={t("tooltipShare")}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-emerald-700 bg-white/80 hover:bg-white px-2 py-0.5 rounded-md border border-slate-200/80 transition cursor-pointer font-sans shadow-2xs"
-            >
-              {isCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Share2 className="w-3 h-3 text-emerald-600" />}
-              <span>{isCopied ? t("copied") : t("share")}</span>
-            </button>
-          </ActionTooltip>
-
-          {/* Heart Toggle Button to Favorite / Unfavorite */}
-          <ActionTooltip label={isFavorite ? t("tooltipFavoriteRemove") : t("tooltipFavoriteSave")} position="bottom">
-            <button
-              type="button"
-              id={`favorite-toggle-btn-${worker.uid}`}
-              data-testid={`favorite-button-${worker.uid}`}
-              onClick={() => onToggleFavorite && onToggleFavorite(worker.uid)}
-              title={isFavorite ? t("tooltipFavoriteRemove") : t("tooltipFavoriteSave")}
-              aria-label={isFavorite ? t("tooltipFavoriteRemove") : t("tooltipFavoriteSave")}
-              className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md border transition-all cursor-pointer font-sans shadow-2xs active:scale-95 ${
-                isFavorite 
-                  ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100" 
-                  : "bg-white/80 hover:bg-white text-slate-600 hover:text-rose-600 border-slate-200/80 hover:border-rose-200"
-              }`}
-            >
-              <Heart className={`w-3.5 h-3.5 transition-transform ${isFavorite ? "fill-rose-500 text-rose-500 scale-110" : "text-slate-400"}`} />
-              <span>{isFavorite ? (language === "kn" ? "ಮೆಚ್ಚಿನವರು" : "Favorited") : (language === "kn" ? "ಮೆಚ್ಚು" : "Save")}</span>
-            </button>
-          </ActionTooltip>
-        </div>
       </div>
 
-      {/* 7-Day Availability Timeline Preview */}
-      <div 
-        id={`timeline-preview-${worker.uid}`}
-        data-testid={`availability-timeline-${worker.uid}`}
-        className="px-4 py-2.5 bg-slate-50/90 border-b border-slate-200/70 text-slate-800"
-      >
-        <div className="flex items-center justify-between gap-2 mb-1.5">
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-emerald-650" />
-            <span className="text-[11px] font-bold text-slate-700 tracking-tight">
-              {t("timeline7Days")}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-[10px] font-mono">
-            <span className={`px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1 border ${
-              freeSlotsCount === 7 
-                ? "bg-emerald-100/90 text-emerald-800 border-emerald-300/80" 
-                : freeSlotsCount >= 4
-                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                  : freeSlotsCount > 0
-                    ? "bg-amber-50 text-amber-800 border-amber-200"
-                    : "bg-rose-50 text-rose-800 border-rose-200"
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${freeSlotsCount > 0 ? "bg-emerald-500" : "bg-rose-500"}`}></span>
-              <span>
-                {freeSlotsCount}/7 {t("freeSlotsCount")}
-              </span>
-            </span>
-          </div>
-        </div>
-
-        {/* Continuous Horizontal Timeline Strip */}
-        <div className="relative pt-1 pb-0.5">
-          {/* Subtle connected track line behind nodes */}
-          <div className="absolute top-[22px] left-3 right-3 h-0.5 bg-slate-200 -z-0 rounded-full" />
-
-          <div className="grid grid-cols-7 gap-1 relative z-10">
-            {upcomingWeekDays.map((day) => {
-              const isBusy = Boolean(worker.unavailableDates && worker.unavailableDates.includes(day.iso)) || (day.isToday && !isAvailableToday);
-              const isSelected = selectedScheduleDay === day.iso;
-
-              return (
-                <button
-                  key={`timeline-${worker.uid}-${day.iso}`}
-                  type="button"
-                  id={`timeline-slot-${worker.uid}-${day.iso}`}
-                  data-testid={`timeline-slot-${day.iso}`}
-                  onClick={() => {
-                    const nextVal = selectedScheduleDay === day.iso ? null : day.iso;
-                    setSelectedScheduleDay(nextVal);
-                    if (nextVal && !isBusy) {
-                      setCustomerInquiry(`Inquiring about availability for ${day.dayName}, ${day.dayNumber} ${day.monthName}.`);
-                    }
-                  }}
-                  title={`${day.isToday ? "Today" : day.dayName}, ${day.dayNumber} ${day.monthName}: ${isBusy ? "Marked Busy / On Leave" : "Free Slot - Available for Hire"}. Click to select.`}
-                  className={`group relative flex flex-col items-center justify-between p-1 rounded-xl transition-all duration-150 cursor-pointer select-none active:scale-95 ${
-                    isSelected
-                      ? isBusy
-                        ? "bg-rose-100 ring-2 ring-rose-500 text-rose-950 shadow-xs"
-                        : "bg-emerald-100 ring-2 ring-emerald-500 text-emerald-950 shadow-xs"
-                      : isBusy
-                        ? "bg-rose-50/70 hover:bg-rose-100/90 text-rose-900 border border-rose-200/80"
-                        : "bg-white hover:bg-emerald-50/80 text-slate-800 border border-slate-200/90 hover:border-emerald-300 shadow-2xs"
-                  }`}
-                >
-                  {/* Day label: Today or Mon/Tue/etc */}
-                  <span className={`text-[9px] font-bold uppercase tracking-wider leading-none mb-1 ${
-                    day.isToday
-                      ? "text-emerald-700 font-extrabold"
-                      : isBusy
-                        ? "text-rose-700"
-                        : "text-slate-500"
-                  }`}>
-                    {day.isToday ? (language === "kn" ? "ಇಂದು" : "Today") : day.dayName.slice(0, 3)}
-                  </span>
-
-                  {/* Node Circle Pip */}
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono font-bold transition-transform group-hover:scale-110 ${
-                    isBusy
-                      ? "bg-rose-500 text-white shadow-2xs"
-                      : "bg-emerald-600 text-white shadow-2xs"
-                  }`}>
-                    {isBusy ? (
-                      <Ban className="w-3 h-3 text-white stroke-[2.5]" />
-                    ) : (
-                      <Check className="w-3 h-3 text-white stroke-[3]" />
-                    )}
-                  </div>
-
-                  {/* Day number below node */}
-                  <span className={`text-[10px] font-extrabold mt-1 font-mono leading-none ${
-                    isBusy ? "text-rose-800 line-through decoration-rose-400" : "text-slate-700"
-                  }`}>
-                    {day.dayNumber}
-                  </span>
-
-                  {/* Status chip */}
-                  <span className={`text-[8px] font-bold uppercase px-1 py-0.2 mt-0.5 rounded leading-tight ${
-                    isBusy 
-                      ? "bg-rose-200/70 text-rose-900" 
-                      : "bg-emerald-100 text-emerald-800"
-                  }`}>
-                    {isBusy ? "Busy" : "Free"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Selected date feedback prompt if customer clicked on a timeline day */}
-        {selectedScheduleDay && (
-          <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[11px] animate-in fade-in duration-150">
-            <span className="text-slate-600 flex items-center gap-1">
-              <span className="font-semibold text-slate-800">
-                {upcomingWeekDays.find(d => d.iso === selectedScheduleDay)?.dayName},{" "}
-                {upcomingWeekDays.find(d => d.iso === selectedScheduleDay)?.dayNumber}{" "}
-                {upcomingWeekDays.find(d => d.iso === selectedScheduleDay)?.monthName}:
-              </span>
-              <span className={
-                (worker.unavailableDates && worker.unavailableDates.includes(selectedScheduleDay)) ||
-                (selectedScheduleDay === todayIso && !isAvailableToday)
-                  ? "text-rose-600 font-bold"
-                  : "text-emerald-700 font-bold"
-              }>
-                {(worker.unavailableDates && worker.unavailableDates.includes(selectedScheduleDay)) ||
-                (selectedScheduleDay === todayIso && !isAvailableToday)
-                  ? (language === "kn" ? "ಕಾರ್ಯನಿರತ / ರಜೆ" : "Marked Busy")
-                  : (language === "kn" ? "ಕೆಲಸಕ್ಕೆ ಲಭ್ಯ (Free Slot)" : "Free for Hire")}
-              </span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedScheduleDay(null)}
-              className="text-[10px] text-slate-400 hover:text-slate-600 font-medium underline cursor-pointer"
-            >
-              {language === "kn" ? "ಮುಚ್ಚಿ" : "Clear"}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Profile Header Content */}
-      <div className="p-5 flex-1 space-y-4">
-        <div className="flex gap-4">
+      {/* Compact Essential Profile Header Content (Always Visible) */}
+      <div className="p-4 sm:p-5 flex-1 space-y-3">
+        <div className="flex gap-3 sm:gap-4">
           <div className="relative shrink-0">
             <img 
               src={worker.photo || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"} 
               alt={worker.name} 
               referrerPolicy="no-referrer"
-              className="w-16 h-16 rounded-xl object-cover ring-2 ring-emerald-100 bg-slate-50"
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover ring-2 ring-emerald-100 bg-slate-50"
             />
-            <ActionTooltip label={isFavorite ? t("tooltipFavoriteRemove") : t("tooltipFavoriteSave")} position="right" className="absolute -bottom-1 -right-1">
-              <button
-                type="button"
-                id={`avatar-favorite-btn-${worker.uid}`}
-                onClick={() => onToggleFavorite && onToggleFavorite(worker.uid)}
-                title={isFavorite ? t("tooltipFavoriteRemove") : t("tooltipFavoriteSave")}
-                aria-label={isFavorite ? t("tooltipFavoriteRemove") : t("tooltipFavoriteSave")}
-                className={`p-1 rounded-full border shadow-xs transition-all cursor-pointer ${
-                  isFavorite 
-                    ? "bg-rose-50 border-rose-200 text-rose-600 ring-2 ring-white" 
-                    : "bg-white border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-200"
-                }`}
-              >
-                <Heart className={`w-3 h-3 ${isFavorite ? "fill-rose-500 text-rose-500" : ""}`} />
-              </button>
-            </ActionTooltip>
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="font-bold text-slate-900 text-base truncate flex items-center gap-1.5">
-              {worker.name}
+              <span className="truncate">{worker.name}</span>
               {isAvailableToday ? (
                 <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" title="Available Today" />
               ) : isMarkedBusyToday ? (
@@ -979,8 +783,8 @@ export default function WorkerCard({
               ) : null}
             </h3>
             
-            <p className="text-slate-500 text-xs font-medium flex items-center gap-1 mt-1">
-              <MapPin className="w-3.5 h-3.5 text-emerald-650" />
+            <p className="text-slate-500 text-xs font-medium flex items-center flex-wrap gap-x-1 gap-y-0.5 mt-1">
+              <MapPin className="w-3.5 h-3.5 text-emerald-650 shrink-0" />
               <span>{worker.locationName}</span>
               <span className="text-slate-300">•</span>
               <span className="text-emerald-700 font-bold">
@@ -988,8 +792,8 @@ export default function WorkerCard({
               </span>
             </p>
 
-            {/* Daily rate badge, experience badge, and rating badge */}
-            <div className="flex flex-wrap gap-1.5 mt-2.5">
+            {/* Daily rate badge, experience badge, and single rating badge */}
+            <div className="flex flex-wrap gap-1.5 mt-2">
               <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 text-xs font-bold leading-normal border border-emerald-150/40 shadow-2xs">
                 ₹{worker.dailyRate} {t("perDay")}
               </span>
@@ -1002,10 +806,13 @@ export default function WorkerCard({
                   id={`header-rating-badge-${worker.uid}`}
                   data-testid={`worker-rating-${worker.uid}`}
                   onClick={() => {
+                    setShowMoreDetails(true);
                     setShowReviewsList(true);
                     setShowFeedbackForm(true);
-                    const elem = document.getElementById(`worker-reviews-section-${worker.uid}`);
-                    if (elem) elem.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    setTimeout(() => {
+                      const elem = document.getElementById(`worker-reviews-section-${worker.uid}`);
+                      if (elem) elem.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    }, 220);
                   }}
                   title={t("tooltipViewReviews")}
                   aria-label={t("tooltipViewReviews")}
@@ -1045,22 +852,262 @@ export default function WorkerCard({
               </span>
             );
           })}
-
-          {/* Quick Skill Radar Chart Trigger */}
-          {worker.skills.length > 0 && (
-            <button
-              type="button"
-              id={`btn-view-radar-${worker.uid}`}
-              data-testid={`btn-view-radar-${worker.uid}`}
-              onClick={() => setShowRadarModal(true)}
-              title="View self-assessed skills proficiency radar chart"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs transition-all cursor-pointer hover:scale-105"
-            >
-              <Activity className="w-3 h-3 text-emerald-600" />
-              <span>Skills Radar</span>
-            </button>
-          )}
         </div>
+      </div>
+
+      {/* Collapsible "More details" Section (Collapsed by Default) */}
+      <AnimatePresence initial={false}>
+        {showMoreDetails && (
+          <motion.div
+            id={`more-details-panel-${worker.uid}`}
+            data-testid={`more-details-panel-${worker.uid}`}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="overflow-hidden border-t border-slate-100 bg-slate-50/30"
+          >
+            <div className="p-4 sm:p-5 space-y-4">
+              {/* Updated Timestamp & Quick Utility Actions (Skills Radar, Save, Share, Download Profile) */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200/70">
+                <span className="inline-flex items-center gap-1 text-slate-400 text-[10px] font-mono">
+                  <Clock className="w-3 h-3" /> {t("updatedRecently")}
+                </span>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {/* Skills Radar Chart Trigger */}
+                  {worker.skills.length > 0 && (
+                    <button
+                      type="button"
+                      id={`btn-view-radar-${worker.uid}`}
+                      data-testid={`btn-view-radar-${worker.uid}`}
+                      onClick={() => setShowRadarModal(true)}
+                      title="View self-assessed skills proficiency radar chart"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs transition-all cursor-pointer active:scale-95"
+                    >
+                      <Activity className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Skills Radar</span>
+                    </button>
+                  )}
+
+                  {/* Save / Favorite Button */}
+                  <ActionTooltip label={isFavorite ? t("tooltipFavoriteRemove") : t("tooltipFavoriteSave")} position="top">
+                    <button
+                      type="button"
+                      id={`favorite-toggle-btn-${worker.uid}`}
+                      data-testid={`favorite-button-${worker.uid}`}
+                      onClick={() => onToggleFavorite && onToggleFavorite(worker.uid)}
+                      title={isFavorite ? t("tooltipFavoriteRemove") : t("tooltipFavoriteSave")}
+                      aria-label={isFavorite ? t("tooltipFavoriteRemove") : t("tooltipFavoriteSave")}
+                      className={`inline-flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                        isFavorite 
+                          ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100" 
+                          : "bg-white hover:bg-slate-100 text-slate-700 hover:text-rose-600 border-slate-200 hover:border-rose-200"
+                      }`}
+                    >
+                      <Heart className={`w-3.5 h-3.5 transition-transform ${isFavorite ? "fill-rose-500 text-rose-500 scale-110" : "text-slate-400"}`} />
+                      <span>{isFavorite ? (language === "kn" ? "ಮೆಚ್ಚಿನವರು" : "Favorited") : (language === "kn" ? "ಮೆಚ್ಚು" : "Save")}</span>
+                    </button>
+                  </ActionTooltip>
+
+                  {/* Share Profile Button */}
+                  <ActionTooltip label={t("tooltipShare")} position="top">
+                    <button
+                      type="button"
+                      id={`share-profile-button-${worker.uid}`}
+                      data-testid="share-profile-button"
+                      onClick={() => handleShareProfile(true)}
+                      title={t("tooltipShare")}
+                      aria-label={t("tooltipShare")}
+                      className={`flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-bold border transition-all duration-200 cursor-pointer active:scale-95 shadow-2xs ${
+                        isCopied 
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-400/20" 
+                          : "bg-white hover:bg-slate-100 hover:text-slate-900 border-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600 animate-bounce" />
+                          <span className="text-emerald-700 font-extrabold">{t("copied")}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Share2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>{t("share")}</span>
+                        </>
+                      )}
+                    </button>
+                  </ActionTooltip>
+
+                  {/* Download Profile Button */}
+                  <ActionTooltip label={t("tooltipDownloadPdf")} position="top">
+                    <button
+                      type="button"
+                      id={`download-profile-button-${worker.uid}`}
+                      data-testid="download-profile-button"
+                      onClick={handleDownloadPdf}
+                      disabled={isDownloadingPdf}
+                      title={t("tooltipDownloadPdf")}
+                      aria-label={t("tooltipDownloadPdf")}
+                      className="flex items-center gap-1.5 bg-white hover:bg-slate-100 hover:text-slate-900 border border-slate-200 text-slate-700 active:scale-95 py-1.5 px-2.5 rounded-xl text-xs font-bold shadow-2xs transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                    >
+                      {isDownloadingPdf ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-emerald-600 border-t-transparent" />
+                          <span className="text-[11px]">{t("compilingPdf")}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>{t("downloadProfile")}</span>
+                        </>
+                      )}
+                    </button>
+                  </ActionTooltip>
+                </div>
+              </div>
+
+              {/* Profile Bio */}
+              <p className="text-slate-600 text-xs italic leading-relaxed">
+                "{worker.about || "Local daily wage professional ready to deliver top work."}"
+              </p>
+
+              {/* 7-Day Availability Timeline Preview */}
+              <div 
+                id={`timeline-preview-${worker.uid}`}
+                data-testid={`availability-timeline-${worker.uid}`}
+                className="p-3 bg-white rounded-xl border border-slate-200/80 text-slate-800 shadow-2xs"
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-650" />
+                    <span className="text-[11px] font-bold text-slate-700 tracking-tight">
+                      {t("timeline7Days")}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                    <span className={`px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1 border ${
+                      freeSlotsCount === 7 
+                        ? "bg-emerald-100/90 text-emerald-800 border-emerald-300/80" 
+                        : freeSlotsCount >= 4
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : freeSlotsCount > 0
+                            ? "bg-amber-50 text-amber-800 border-amber-200"
+                            : "bg-rose-50 text-rose-800 border-rose-200"
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${freeSlotsCount > 0 ? "bg-emerald-500" : "bg-rose-500"}`}></span>
+                      <span>
+                        {freeSlotsCount}/7 {t("freeSlotsCount")}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Continuous Horizontal Timeline Strip */}
+                <div className="relative pt-1 pb-0.5">
+                  <div className="absolute top-[22px] left-3 right-3 h-0.5 bg-slate-200 -z-0 rounded-full" />
+
+                  <div className="grid grid-cols-7 gap-1 relative z-10">
+                    {upcomingWeekDays.map((day) => {
+                      const isBusy = Boolean(worker.unavailableDates && worker.unavailableDates.includes(day.iso)) || (day.isToday && !isAvailableToday);
+                      const isSelected = selectedScheduleDay === day.iso;
+
+                      return (
+                        <button
+                          key={`timeline-${worker.uid}-${day.iso}`}
+                          type="button"
+                          id={`timeline-slot-${worker.uid}-${day.iso}`}
+                          data-testid={`timeline-slot-${day.iso}`}
+                          onClick={() => {
+                            const nextVal = selectedScheduleDay === day.iso ? null : day.iso;
+                            setSelectedScheduleDay(nextVal);
+                            if (nextVal && !isBusy) {
+                              setCustomerInquiry(`Inquiring about availability for ${day.dayName}, ${day.dayNumber} ${day.monthName}.`);
+                            }
+                          }}
+                          title={`${day.isToday ? "Today" : day.dayName}, ${day.dayNumber} ${day.monthName}: ${isBusy ? "Marked Busy / On Leave" : "Free Slot - Available for Hire"}. Click to select.`}
+                          className={`group relative flex flex-col items-center justify-between p-1 rounded-xl transition-all duration-150 cursor-pointer select-none active:scale-95 ${
+                            isSelected
+                              ? isBusy
+                                ? "bg-rose-100 ring-2 ring-rose-500 text-rose-950 shadow-xs"
+                                : "bg-emerald-100 ring-2 ring-emerald-500 text-emerald-950 shadow-xs"
+                              : isBusy
+                                ? "bg-rose-50/70 hover:bg-rose-100/90 text-rose-900 border border-rose-200/80"
+                                : "bg-white hover:bg-emerald-50/80 text-slate-800 border border-slate-200/90 hover:border-emerald-300 shadow-2xs"
+                          }`}
+                        >
+                          <span className={`text-[9px] font-bold uppercase tracking-wider leading-none mb-1 ${
+                            day.isToday
+                              ? "text-emerald-700 font-extrabold"
+                              : isBusy
+                                ? "text-rose-700"
+                                : "text-slate-500"
+                          }`}>
+                            {day.isToday ? (language === "kn" ? "ಇಂದು" : "Today") : day.dayName.slice(0, 3)}
+                          </span>
+
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono font-bold transition-transform group-hover:scale-110 ${
+                            isBusy
+                              ? "bg-rose-500 text-white shadow-2xs"
+                              : "bg-emerald-600 text-white shadow-2xs"
+                          }`}>
+                            {isBusy ? (
+                              <Ban className="w-3 h-3 text-white stroke-[2.5]" />
+                            ) : (
+                              <Check className="w-3 h-3 text-white stroke-[3]" />
+                            )}
+                          </div>
+
+                          <span className={`text-[10px] font-extrabold mt-1 font-mono leading-none ${
+                            isBusy ? "text-rose-800 line-through decoration-rose-400" : "text-slate-700"
+                          }`}>
+                            {day.dayNumber}
+                          </span>
+
+                          <span className={`text-[8px] font-bold uppercase px-1 py-0.2 mt-0.5 rounded leading-tight ${
+                            isBusy 
+                              ? "bg-rose-200/70 text-rose-900" 
+                              : "bg-emerald-100 text-emerald-800"
+                          }`}>
+                            {isBusy ? "Busy" : "Free"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {selectedScheduleDay && (
+                  <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[11px] animate-in fade-in duration-150">
+                    <span className="text-slate-600 flex items-center gap-1">
+                      <span className="font-semibold text-slate-800">
+                        {upcomingWeekDays.find(d => d.iso === selectedScheduleDay)?.dayName},{" "}
+                        {upcomingWeekDays.find(d => d.iso === selectedScheduleDay)?.dayNumber}{" "}
+                        {upcomingWeekDays.find(d => d.iso === selectedScheduleDay)?.monthName}:
+                      </span>
+                      <span className={
+                        (worker.unavailableDates && worker.unavailableDates.includes(selectedScheduleDay)) ||
+                        (selectedScheduleDay === todayIso && !isAvailableToday)
+                          ? "text-rose-600 font-bold"
+                          : "text-emerald-700 font-bold"
+                      }>
+                        {(worker.unavailableDates && worker.unavailableDates.includes(selectedScheduleDay)) ||
+                        (selectedScheduleDay === todayIso && !isAvailableToday)
+                          ? (language === "kn" ? "ಕಾರ್ಯನಿರತ / ರಜೆ" : "Marked Busy")
+                          : (language === "kn" ? "ಕೆಲಸಕ್ಕೆ ಲಭ್ಯ (Free Slot)" : "Free for Hire")}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedScheduleDay(null)}
+                      className="text-[10px] text-slate-400 hover:text-slate-600 font-medium underline cursor-pointer"
+                    >
+                      {language === "kn" ? "ಮುಚ್ಚಿ" : "Clear"}
+                    </button>
+                  </div>
+                )}
+              </div>
 
         {/* Small Static Map-Like Preview Card displaying worker distance, general town area, map icon, and simplified grid coordinates */}
         <div 
@@ -1238,7 +1285,7 @@ export default function WorkerCard({
         <div 
           id={`worker-schedule-${worker.uid}`}
           data-testid="worker-schedule-section"
-          className="p-3 bg-slate-50/90 rounded-xl border border-slate-200/80 space-y-2.5"
+          className="p-3 bg-white rounded-xl border border-slate-200/80 space-y-2.5 shadow-2xs"
         >
           <div className="flex items-center justify-between gap-1 flex-wrap">
             <div className="flex items-center gap-1.5">
@@ -1376,11 +1423,6 @@ export default function WorkerCard({
             </div>
           )}
         </div>
-
-        {/* Profile Bio */}
-        <p className="text-slate-600 text-xs line-clamp-2 italic leading-relaxed">
-          "{worker.about || "Local daily wage professional ready to deliver top work."}"
-        </p>
 
         {/* Past Work Photo Grid (imageUrls) */}
         {(() => {
@@ -1830,180 +1872,129 @@ export default function WorkerCard({
             </div>
           )}
         </div>
-      </div>
 
-      {/* Date-specific Availability Notice for Direct Call */}
-      {(isMarkedBusyToday || (selectedScheduleDay && worker.unavailableDates?.includes(selectedScheduleDay))) && (
-        <div 
-          data-testid="schedule-call-warning"
-          className="px-4 py-2 bg-amber-50/90 border-t border-amber-200/70 text-amber-900 text-xs flex items-center justify-between gap-2"
+              {/* Date-specific Availability Notice for Direct Call */}
+              {(isMarkedBusyToday || (selectedScheduleDay && worker.unavailableDates?.includes(selectedScheduleDay))) && (
+                <div 
+                  data-testid="schedule-call-warning"
+                  className="px-3.5 py-2 rounded-xl bg-amber-50/90 border border-amber-200/70 text-amber-900 text-xs flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span className="truncate">
+                      {selectedScheduleDay && worker.unavailableDates?.includes(selectedScheduleDay)
+                        ? (language === "kn" 
+                            ? `${worker.name} ${formatDisplayDate(selectedScheduleDay)} ರಂದು ಕಾರ್ಯನಿರತರಾಗಿದ್ದಾರೆ.`
+                            : `${worker.name} is marked unavailable on ${formatDisplayDate(selectedScheduleDay)}.`)
+                        : (language === "kn"
+                            ? `${worker.name} ಇಂದು ಕಾರ್ಯನಿರತರಾಗಿದ್ದಾರೆ. ಮುಂಬರುವ ದಿನಗಳ ಬಗ್ಗೆ ವಿಚಾರಿಸಲು ಕರೆ ಮಾಡಿ.`
+                            : `${worker.name} is marked busy today. Call to inquire for future dates.`)}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold font-mono text-amber-700 uppercase shrink-0">
+                    {language === "kn" ? "ಸೂಚನೆ" : "Notice"}
+                  </span>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Always-Visible Primary Action Buttons: WhatsApp & Direct Call */}
+      <div className="border-t border-slate-100 px-4 py-3 bg-slate-50/70 flex flex-wrap items-center gap-2">
+        {/* Direct Message via WhatsApp Button with Pre-filled Template */}
+        <div className="flex items-center flex-1 min-w-[165px]">
+          <ActionTooltip label={t("tooltipWhatsapp")} position="top" className="flex-1 min-w-0">
+            <a 
+              id={`whatsapp-direct-button-${worker.uid}`}
+              data-testid="whatsapp-direct-message-button"
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={t("tooltipWhatsapp")}
+              aria-label={t("tooltipWhatsapp")}
+              className="w-full flex items-center justify-center gap-1.5 bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-white py-2 px-2.5 sm:px-3 rounded-l-xl text-[11px] sm:text-xs font-black shadow-sm shadow-emerald-950/10 tracking-wide hover:shadow-md transition-all duration-200 uppercase group"
+            >
+              <MessageCircle className="w-3.5 h-3.5 fill-white text-white shrink-0 transition-transform group-hover:scale-110" />
+              <span className="truncate">{t("directMessageViaWhatsapp")}</span>
+            </a>
+          </ActionTooltip>
+          <ActionTooltip label={t("tooltipWhatsappCustomize")} position="top">
+            <button
+              type="button"
+              id={`whatsapp-customize-btn-${worker.uid}`}
+              data-testid="whatsapp-customize-button"
+              onClick={() => setShowWhatsAppModal(true)}
+              title={t("tooltipWhatsappCustomize")}
+              aria-label={t("tooltipWhatsappCustomize")}
+              className="bg-[#20ba59] hover:bg-[#1caa4f] active:scale-95 text-white py-2 px-2 rounded-r-xl border-l border-emerald-600/40 shadow-sm shadow-emerald-950/10 transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          </ActionTooltip>
+        </div>
+
+        {/* Direct Call Button: on mobile triggers native tel: link; on desktop opens contact modal with copy number */}
+        <ActionTooltip 
+          label={isMobile ? t("tooltipDirectCall") : (language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone & Call Worker")} 
+          position="top"
+          className="flex-1 sm:flex-initial min-w-[130px]"
         >
-          <div className="flex items-center gap-1.5 min-w-0">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span className="truncate">
-              {selectedScheduleDay && worker.unavailableDates?.includes(selectedScheduleDay)
-                ? (language === "kn" 
-                    ? `${worker.name} ${formatDisplayDate(selectedScheduleDay)} ರಂದು ಕಾರ್ಯನಿರತರಾಗಿದ್ದಾರೆ.`
-                    : `${worker.name} is marked unavailable on ${formatDisplayDate(selectedScheduleDay)}.`)
-                : (language === "kn"
-                    ? `${worker.name} ಇಂದು ಕಾರ್ಯನಿರತರಾಗಿದ್ದಾರೆ. ಮುಂಬರುವ ದಿನಗಳ ಬಗ್ಗೆ ವಿಚಾರಿಸಲು ಕರೆ ಮಾಡಿ.`
-                    : `${worker.name} is marked busy today. Call to inquire for future dates.`)}
-            </span>
-          </div>
-          <span className="text-[10px] font-bold font-mono text-amber-700 uppercase shrink-0">
-            {language === "kn" ? "ಸೂಚನೆ" : "Notice"}
-          </span>
-        </div>
-      )}
-
-      {/* Worker Card Action Footer */}
-      <div className="border-t border-slate-150 p-4 bg-slate-50/80 flex flex-wrap items-center justify-between gap-2.5">
-        {/* Review rating summary trigger */}
-        <ActionTooltip label={t("tooltipViewReviews")} position="top">
-          <button 
-            id={`reviews-button-${worker.uid}`}
-            data-testid={`reviews-button-${worker.uid}`}
-            onClick={() => {
-              setShowReviewsList(true);
-              setShowFeedbackForm(true);
-              const elem = document.getElementById(`worker-reviews-section-${worker.uid}`);
-              if (elem) elem.scrollIntoView({ behavior: "smooth", block: "nearest" });
-            }}
-            className="flex items-center gap-1.5 text-slate-700 hover:text-emerald-750 transition text-xs font-bold cursor-pointer py-1.5 px-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 shadow-2xs active:scale-95"
-            title={t("tooltipViewReviews")}
-            aria-label={t("tooltipViewReviews")}
-          >
-            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-            <span className="font-extrabold">{averageRating}</span>
-            <span className="text-slate-500 font-normal">
-              ({reviews.length} {reviews.length === 1 ? (language === "kn" ? "ವಿಮರ್ಶೆ" : "review") : t("reviews")})
-            </span>
-          </button>
+          {isMobile ? (
+            <a 
+              id={`direct-call-button-${worker.uid}`}
+              data-testid="direct-call-button"
+              href={`tel:${worker.phone.trim()}`}
+              title={t("tooltipDirectCall")}
+              aria-label={t("tooltipDirectCall")}
+              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2 px-3.5 rounded-xl text-xs font-black shadow-sm shadow-emerald-700/20 tracking-wider hover:shadow-md transition-all duration-200 uppercase group"
+            >
+              <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+              <span>{t("directCall")}</span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              id={`direct-call-button-${worker.uid}`}
+              data-testid="direct-call-button"
+              onClick={() => {
+                setShowDesktopCallModal(true);
+                setIsPhoneCopied(false);
+              }}
+              title={language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone Number & Call"}
+              aria-label={language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone Number & Call"}
+              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2 px-3.5 rounded-xl text-xs font-black shadow-sm shadow-emerald-700/20 tracking-wider hover:shadow-md transition-all duration-200 uppercase group cursor-pointer"
+            >
+              <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+              <span>{t("directCall")}</span>
+            </button>
+          )}
         </ActionTooltip>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Social Media Share Profile Button */}
-          <ActionTooltip label={t("tooltipShare")} position="top">
-            <button
-              id={`share-profile-button-${worker.uid}`}
-              data-testid="share-profile-button"
-              onClick={() => handleShareProfile(true)}
-              title={t("tooltipShare")}
-              aria-label={t("tooltipShare")}
-              className={`flex items-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold border transition-all duration-200 cursor-pointer active:scale-95 shadow-2xs ${
-                isCopied 
-                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-400/20" 
-                  : "bg-white hover:bg-slate-100 hover:text-slate-900 border-slate-200 text-slate-700"
-              }`}
-            >
-              {isCopied ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-600 animate-bounce" />
-                  <span className="text-emerald-700 font-extrabold">{t("copied")}</span>
-                </>
-              ) : (
-                <>
-                  <Share2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{t("share")}</span>
-                </>
-              )}
-            </button>
-          </ActionTooltip>
-
-          {/* Download Profile Button */}
-          <ActionTooltip label={t("tooltipDownloadPdf")} position="top">
-            <button
-              id={`download-profile-button-${worker.uid}`}
-              data-testid="download-profile-button"
-              onClick={handleDownloadPdf}
-              disabled={isDownloadingPdf}
-              title={t("tooltipDownloadPdf")}
-              aria-label={t("tooltipDownloadPdf")}
-              className="flex items-center gap-1.5 bg-white hover:bg-slate-100 hover:text-slate-900 border border-slate-200 text-slate-700 active:scale-95 py-2 px-3 rounded-xl text-xs font-bold shadow-2xs transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
-            >
-              {isDownloadingPdf ? (
-                <>
-                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-emerald-600 border-t-transparent" />
-                  <span className="text-[11px]">{t("compilingPdf")}</span>
-                </>
-              ) : (
-                <>
-                  <Download className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{t("downloadProfile")}</span>
-                </>
-              )}
-            </button>
-          </ActionTooltip>
-
-          {/* Direct Message via WhatsApp Button with Pre-filled Template */}
-          <div className="flex items-center shrink-0">
-            <ActionTooltip label={t("tooltipWhatsapp")} position="top">
-              <a 
-                id={`whatsapp-direct-button-${worker.uid}`}
-                data-testid="whatsapp-direct-message-button"
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={t("tooltipWhatsapp")}
-                aria-label={t("tooltipWhatsapp")}
-                className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-white py-2 px-3 rounded-l-xl text-xs font-black shadow-md shadow-emerald-950/15 tracking-wider hover:shadow-lg transition-all duration-200 uppercase group shrink-0"
-              >
-                <MessageCircle className="w-3.5 h-3.5 fill-white text-white transition-transform group-hover:scale-110" />
-                <span>{t("directMessageViaWhatsapp")}</span>
-              </a>
-            </ActionTooltip>
-            <ActionTooltip label={t("tooltipWhatsappCustomize")} position="top">
-              <button
-                type="button"
-                id={`whatsapp-customize-btn-${worker.uid}`}
-                data-testid="whatsapp-customize-button"
-                onClick={() => setShowWhatsAppModal(true)}
-                title={t("tooltipWhatsappCustomize")}
-                aria-label={t("tooltipWhatsappCustomize")}
-                className="bg-[#20ba59] hover:bg-[#1caa4f] active:scale-95 text-white py-2 px-1.5 rounded-r-xl border-l border-emerald-600/40 shadow-md shadow-emerald-950/15 transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0"
-              >
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-            </ActionTooltip>
-          </div>
-
-          {/* Direct Call Button: on mobile triggers native tel: link; on desktop opens contact modal with copy number */}
-          <ActionTooltip 
-            label={isMobile ? t("tooltipDirectCall") : (language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone & Call Worker")} 
-            position="top"
-          >
-            {isMobile ? (
-              <a 
-                id={`direct-call-button-${worker.uid}`}
-                data-testid="direct-call-button"
-                href={`tel:${worker.phone.trim()}`}
-                title={t("tooltipDirectCall")}
-                aria-label={t("tooltipDirectCall")}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2 px-3.5 rounded-xl text-xs font-black shadow-md shadow-emerald-700/20 tracking-wider hover:shadow-lg transition-all duration-200 uppercase group shrink-0"
-              >
-                <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
-                <span>{t("directCall")}</span>
-              </a>
-            ) : (
-              <button
-                type="button"
-                id={`direct-call-button-${worker.uid}`}
-                data-testid="direct-call-button"
-                onClick={() => {
-                  setShowDesktopCallModal(true);
-                  setIsPhoneCopied(false);
-                }}
-                title={language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone Number & Call"}
-                aria-label={language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone Number & Call"}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2 px-3.5 rounded-xl text-xs font-black shadow-md shadow-emerald-700/20 tracking-wider hover:shadow-lg transition-all duration-200 uppercase group shrink-0 cursor-pointer"
-              >
-                <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
-                <span>{t("directCall")}</span>
-              </button>
-            )}
-          </ActionTooltip>
-        </div>
       </div>
+
+      {/* Accessible Collapsible Section Toggle Button at Bottom of Card */}
+      <button
+        type="button"
+        id={`toggle-more-details-${worker.uid}`}
+        data-testid={`toggle-more-details-${worker.uid}`}
+        aria-expanded={showMoreDetails}
+        aria-controls={`more-details-panel-${worker.uid}`}
+        onClick={() => setShowMoreDetails((prev) => !prev)}
+        className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50/40 hover:bg-emerald-50/90 border-t border-slate-200/80 transition-colors cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+      >
+        {showMoreDetails ? (
+          <>
+            <span>Less details</span>
+            <ChevronUp className="w-4 h-4 shrink-0" />
+          </>
+        ) : (
+          <>
+            <span>More details</span>
+            <ChevronDown className="w-4 h-4 shrink-0" />
+          </>
+        )}
+      </button>
 
       {/* Direct Message via WhatsApp Inquiry Modal */}
       {showWhatsAppModal && (
@@ -2159,7 +2150,7 @@ export default function WorkerCard({
           onClick={() => setShowDesktopCallModal(false)}
         >
           <div 
-            className="relative max-w-md w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 p-5 sm:p-6 space-y-4"
+            className="relative max-w-md w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
             data-testid={`desktop-call-modal-${worker.uid}`}
           >
@@ -2214,10 +2205,10 @@ export default function WorkerCard({
                 {language === "kn" ? "ದೂರವಾಣಿ ಸಂಖ್ಯೆ (Phone Number):" : "Worker Phone Number:"}
               </label>
               
-              <div className="flex items-center justify-between p-3.5 bg-emerald-50/70 border-2 border-emerald-500/30 rounded-xl gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Phone className="w-5 h-5 text-emerald-700 shrink-0" />
-                  <span className="font-mono text-xl sm:text-2xl font-black text-slate-900 tracking-wider select-all truncate">
+              <div className="flex flex-wrap sm:flex-nowrap items-center justify-between p-3 sm:p-3.5 bg-emerald-50/70 border-2 border-emerald-500/30 rounded-xl gap-2.5 sm:gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700 shrink-0" />
+                  <span className="font-mono text-lg sm:text-2xl font-black text-slate-900 tracking-wider select-all truncate">
                     {formatDisplayPhone(worker.phone)}
                   </span>
                 </div>
@@ -2298,7 +2289,7 @@ export default function WorkerCard({
           onClick={() => setShowShareModal(false)}
         >
           <div 
-            className="relative max-w-md w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 p-5 space-y-4"
+            className="relative max-w-md w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -2592,7 +2583,7 @@ export default function WorkerCard({
           onClick={() => setShowRadarModal(false)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 border border-slate-200"
+            className="bg-white rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">

@@ -869,7 +869,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
   }
 
   return (
-    <div id="profile-editor-container" className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 max-w-2xl mx-auto">
+    <div id="profile-editor-container" className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 max-w-2xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5 mb-6">
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -975,7 +975,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
           {/* Quick Preset selection */}
           <div className="md:col-span-3">
             <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-400 mb-2">Popular Work Photos Presets</h4>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 sm:gap-2">
               {PRESET_AVATARS.map((preset, index) => (
                 <button
                   key={index}
@@ -1997,7 +1997,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
         </div>
 
         {/* Sticky Bottom Save Bar (Always visible while scrolling) */}
-        <div className="sticky bottom-3 z-30 bg-emerald-950/95 backdrop-blur-md text-white rounded-2xl p-3 px-4 shadow-xl border border-emerald-800 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-2">
+        <div className="sticky bottom-2 sm:bottom-3 z-30 bg-emerald-950/95 backdrop-blur-md text-white rounded-2xl p-2.5 sm:p-3 px-3 sm:px-4 shadow-xl border border-emerald-800 flex items-center justify-between gap-2 sm:gap-3 animate-in slide-in-from-bottom-2">
           <div className="flex items-center gap-2 min-w-0">
             <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isAvailable ? 'bg-emerald-400' : 'bg-slate-400'}`} />
             <div className="truncate">
@@ -2061,7 +2061,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
           `}</style>
 
           <div 
-            className="relative max-w-lg w-full bg-white rounded-3xl overflow-hidden shadow-2xl border border-slate-200 p-6 space-y-4 my-8"
+            className="relative max-w-lg w-full bg-white rounded-3xl overflow-hidden shadow-2xl border border-slate-200 p-4 sm:p-6 space-y-4 my-4 sm:my-8 max-h-[92vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
             data-testid="qr-marketing-modal"
           >

@@ -339,7 +339,7 @@ export default function WorkerDashboard({
   return (
     <div className="space-y-6 animate-fadeIn" id="worker-dashboard-panel">
       {/* Top Banner: Artisan Identity & Performance Overview */}
-      <div className="bg-gradient-to-r from-emerald-900 via-slate-900 to-emerald-950 text-white rounded-2xl p-6 border border-emerald-800/60 shadow-md relative overflow-hidden">
+      <div className="bg-gradient-to-r from-emerald-900 via-slate-900 to-emerald-950 text-white rounded-2xl p-4 sm:p-6 border border-emerald-800/60 shadow-md relative overflow-hidden">
         {/* Subtle geometric glowing accent */}
         <div className="absolute -top-16 -right-16 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
         
@@ -489,7 +489,7 @@ export default function WorkerDashboard({
       <div 
         id="worker-earnings-chart-section"
         data-testid="worker-earnings-chart"
-        className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-5"
+        className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4 sm:space-y-5"
       >
         {/* Header with Title and Control Toggles */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-150 pb-4">
@@ -621,7 +621,7 @@ export default function WorkerDashboard({
         </div>
 
         {/* The Recharts Canvas Container */}
-        <div className="h-72 w-full pt-1">
+        <div className="h-56 sm:h-72 w-full pt-1">
           <ResponsiveContainer width="100%" height="100%">
             {chartViewMode === "area" ? (
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -724,9 +724,9 @@ export default function WorkerDashboard({
       </div>
 
       {/* Middle Section: Rating Breakdown & Feedback Insights */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Rating Distribution Breakdown Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
@@ -765,7 +765,7 @@ export default function WorkerDashboard({
           </div>
 
           {/* Quick Highlight Footer */}
-          <div className="mt-6 pt-4 border-t border-slate-150 bg-slate-50/60 -mx-6 -mb-6 p-4 rounded-b-2xl flex items-center justify-between text-xs">
+          <div className="mt-6 pt-4 border-t border-slate-150 bg-slate-50/60 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 p-4 rounded-b-2xl flex items-center justify-between gap-2 flex-wrap text-xs">
             <span className="text-slate-500 font-medium">Community Trust Score</span>
             <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200/50">
               Level 1 Artisan ★
@@ -774,7 +774,7 @@ export default function WorkerDashboard({
         </div>
 
         {/* Quality Feedback Highlights */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
@@ -812,7 +812,7 @@ export default function WorkerDashboard({
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-150 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-4 pt-3 border-t border-slate-150 flex items-center justify-between flex-wrap gap-2 text-xs text-slate-500">
             <span>Direct contact enabled for: <strong>{profile?.phone || "Phone not set"}</strong></span>
             <span className="font-mono text-[11px] text-emerald-700 font-bold">
               {profile?.isAvailable ? "● Ready for Jobs Today" : "○ Currently Away"}
@@ -822,7 +822,7 @@ export default function WorkerDashboard({
       </div>
 
       {/* Bottom Section: Recent Customer Feedback Summaries */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-150 pb-4">
           <div>
             <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
