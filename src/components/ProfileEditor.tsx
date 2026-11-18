@@ -9,14 +9,12 @@ import {
   Image as ImageIcon, 
   DollarSign, 
   FileText,
-  Upload,
   UserCheck,
   Zap,
   Sparkles,
   AlertCircle,
   Plus,
   Trash2,
-  ExternalLink,
   Link,
   Calendar,
   CalendarDays,
@@ -38,12 +36,17 @@ import {
   Loader2,
   Sliders,
   Globe,
-  ChevronRight
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Camera,
+  Mic,
+  MicOff
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { WorkerProfile, TOWN_CENTERS, INDIAN_MAJOR_CITIES, CityHub } from "../types";
 import ChipGroup from "./ChipGroup";
-import SkillRadarChart from "./SkillRadarChart";
 import { 
   compressAndConvertImage, 
   PRESET_AVATARS, 
@@ -55,20 +58,46 @@ import {
 } from "../utils";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
-import { useLanguage } from "../context/LanguageContext";
+import { useLanguage, getBioSuggestions } from "../context/LanguageContext";
 
 interface ProfileEditorProps {
   uid: string;
   onSaveSuccess: () => void;
 }
 
+const MAX_WORK_PHOTOS = 6;
+const MAX_BIO_LENGTH = 200;
+const MAX_RAW_IMAGE_BYTES = 15 * 1024 * 1024;
+
+const SKILL_LEVEL_OPTIONS = [
+  { key: "skillLevelBeginner", score: 60 },
+  { key: "skillLevelExperienced", score: 80 },
+  { key: "skillLevelExpert", score: 95 }
+] as const;
+
+function mapScoreToSkillLevel(score: number | undefined): 60 | 80 | 95 {
+  if (typeof score !== "number" || !Number.isFinite(score)) return 80;
+  if (score < 70) return 60;
+  if (score < 87.5) return 80;
+  return 95;
+}
+
+function formatShortBusyDate(isoString: string): string {
+  if (!isoString) return "";
+  const parts = isoString.split("-").map(Number);
+  if (parts.length !== 3) return isoString;
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+  return `${dayName} ${d.getDate()}`;
+}
+
 // Sample past work URLs for instant 1-click addition
 const SAMPLE_WORK_URLS = [
-  { label: "Wall Painting & Coating", url: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600" },
-  { label: "Plumbing & Piping", url: "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600" },
-  { label: "Electrical Conduits", url: "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=600" },
-  { label: "Lawn & Gardening", url: "https://images.unsplash.com/photo-1558904541-efa8c1a68fc6?auto=format&fit=crop&q=80&w=600" },
-  { label: "Masonry & Flooring", url: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&q=80&w=600" }
+  { label: "Wall Painting", url: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600" },
+  { label: "Plumbing & Masonry", url: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&q=80&w=600" },
+  { label: "Electrical Work", url: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&q=80&w=600" },
+  { label: "Lawn & Gardening", url: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&q=80&w=600" },
+  { label: "Tile & Flooring", url: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=600" }
 ];
 
 export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps) {
@@ -76,15 +105,62 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showLiveToast, setShowLiveToast] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [savedSnapshot, setSavedSnapshot] = useState<string>("");
+  const [showSampleAvatars, setShowSampleAvatars] = useState(false);
+  const [showAdvancedPhotoLink, setShowAdvancedPhotoLink] = useState(false);
+  const [showManualDaysCalendar, setShowManualDaysCalendar] = useState(false);
+  const [isUploadingWorkPhotos, setIsUploadingWorkPhotos] = useState(false);
+  const [uploadProgressText, setUploadProgressText] = useState("");
+  const [workPhotoError, setWorkPhotoError] = useState("");
+  const [isListeningBio, setIsListeningBio] = useState(false);
+  const [voiceBioError, setVoiceBioError] = useState("");
+  const speechRecognitionRef = useRef<any>(null);
+  const SpeechRecognitionCtor =
+    typeof window !== "undefined"
+      ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      : undefined;
+  const isSpeechSupported = Boolean(SpeechRecognitionCtor);
+  const [avatarBroken, setAvatarBroken] = useState(false);
+  const [brokenPresets, setBrokenPresets] = useState<Record<string, boolean>>({});
+  const [brokenPortfolioUrls, setBrokenPortfolioUrls] = useState<Record<string, boolean>>({});
+  const [expandedSections, setExpandedSections] = useState<{
+    about: boolean;
+    portfolio: boolean;
+    skillLevel: boolean;
+    calendar: boolean;
+    qr: boolean;
+  }>({
+    about: false,
+    portfolio: false,
+    skillLevel: false,
+    calendar: false,
+    qr: false
+  });
+
+  useEffect(() => {
+    return () => {
+      try {
+        speechRecognitionRef.current?.abort?.();
+      } catch {
+        // Ignore abort cleanup error
+      }
+    };
+  }, []);
+
+  const toggleAccordionSection = (key: "about" | "portfolio" | "skillLevel" | "calendar" | "qr") => {
+    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Primary worker state properties
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
   const [skillProficiencies, setSkillProficiencies] = useState<Record<string, number>>({});
-  const [dailyRate, setDailyRate] = useState<number>(550);
+  const [dailyRate, setDailyRate] = useState<string>("");
+  const [dailyRateError, setDailyRateError] = useState<string>("");
   
   // Location states (Supports All-India Hubs, Live Device GPS, and Custom Addresses)
   const [selectedLocationIdx, setSelectedLocationIdx] = useState<number | null>(0);
@@ -125,7 +201,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [inputUrl, setInputUrl] = useState("");
   const [urlError, setUrlError] = useState("");
-  const [experience, setExperience] = useState<number>(3);
+  const [experience, setExperience] = useState<string>("");
   const [about, setAbout] = useState("");
   const [existingCreatedAt, setExistingCreatedAt] = useState<any>(null);
 
@@ -214,27 +290,42 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const profile = docSnap.data() as WorkerProfile;
-          setName(profile.name || "");
-          setPhone(profile.phone || "");
-          setSkills(profile.skills || []);
-          setSkillProficiencies(profile.skillProficiencies || {});
-          setDailyRate(profile.dailyRate || 500);
-          setIsAvailable(profile.isAvailable !== false);
-          setUnavailableDates(
-            profile.unavailableDates && Array.isArray(profile.unavailableDates) 
-              ? profile.unavailableDates.filter(Boolean) 
-              : []
-          );
-          setPhoto(profile.photo || PRESET_AVATARS[0].url);
-          
-          // Load imageUrls with fallback to legacy gallery or presets
+          const loadedName = profile.name || "";
+          const loadedPhone = profile.phone || "";
+          const loadedSkills = profile.skills || [];
+          const loadedProficiencies = profile.skillProficiencies || {};
+          const loadedRateNum = Number(profile.dailyRate);
+          const loadedRateStr = Number.isFinite(loadedRateNum) && loadedRateNum > 0 ? String(Math.floor(loadedRateNum)) : "";
+          const loadedIsAvailable = profile.isAvailable !== false;
+          const loadedUnavailableDates =
+            profile.unavailableDates && Array.isArray(profile.unavailableDates)
+              ? profile.unavailableDates.filter(Boolean)
+              : [];
+          const loadedPhoto = profile.photo || PRESET_AVATARS[0].url;
           const loadedUrls = (profile.imageUrls && Array.isArray(profile.imageUrls) && profile.imageUrls.length > 0)
             ? profile.imageUrls
             : (profile.gallery && profile.gallery.length > 0 ? profile.gallery : PRESET_GALLERIES[0].urls);
-          setImageUrls(loadedUrls);
+          const hasValidExperience =
+            profile.experience !== undefined &&
+            profile.experience !== null &&
+            profile.experience !== ("" as unknown as number) &&
+            Number.isFinite(Number(profile.experience)) &&
+            Number(profile.experience) >= 0;
+          const loadedExperienceStr = hasValidExperience ? String(Math.floor(Number(profile.experience))) : "";
+          const loadedAbout = profile.about || "";
 
-          setExperience(profile.experience || 1);
-          setAbout(profile.about || "");
+          setName(loadedName);
+          setPhone(loadedPhone);
+          setSkills(loadedSkills);
+          setSkillProficiencies(loadedProficiencies);
+          setDailyRate(loadedRateStr);
+          setDailyRateError("");
+          setIsAvailable(loadedIsAvailable);
+          setUnavailableDates(loadedUnavailableDates);
+          setPhoto(loadedPhoto);
+          setImageUrls(loadedUrls);
+          setExperience(loadedExperienceStr);
+          setAbout(loadedAbout);
           setExistingCreatedAt(profile.createdAt || null);
           
           // Populate location states
@@ -276,30 +367,94 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
             setSelectedLocationIdx(null);
             setLocationSource("custom");
           }
+
+          setSavedSnapshot(
+            JSON.stringify({
+              name: loadedName,
+              phone: loadedPhone,
+              dailyRate: loadedRateStr,
+              experience: loadedExperienceStr,
+              locationName: initialLocName,
+              latitude: initialLat,
+              longitude: initialLng,
+              skills: loadedSkills,
+              skillProficiencies: loadedProficiencies,
+              about: loadedAbout,
+              photo: loadedPhoto,
+              imageUrls: loadedUrls,
+              isAvailable: loadedIsAvailable,
+              unavailableDates: loadedUnavailableDates
+            })
+          );
         } else {
-          // Initialize some defaults
+          // Initialize defaults for new profile
+          const defaultLoc = TOWN_CENTERS[0];
+          const defaultAbout = "";
+          const defaultUrls = PRESET_GALLERIES[0].urls;
+          const defaultPhoto = PRESET_AVATARS[0].url;
+
           setName("");
           setPhone("");
           setSkills([]);
           setSkillProficiencies({});
-          setDailyRate(500);
+          setDailyRate("");
+          setDailyRateError("");
+          setExperience("");
           setSelectedLocationIdx(0);
-          setLocationName(TOWN_CENTERS[0].name);
-          setLatitude(TOWN_CENTERS[0].latitude);
-          setLongitude(TOWN_CENTERS[0].longitude);
+          setLocationName(defaultLoc.name);
+          setLatitude(defaultLoc.latitude);
+          setLongitude(defaultLoc.longitude);
           setLocationSource("preset");
-          setCustomAddressInput(TOWN_CENTERS[0].name);
-          setManualLatInput(TOWN_CENTERS[0].latitude.toString());
-          setManualLngInput(TOWN_CENTERS[0].longitude.toString());
+          setCustomAddressInput(defaultLoc.name);
+          setManualLatInput(defaultLoc.latitude.toString());
+          setManualLngInput(defaultLoc.longitude.toString());
           setIsAvailable(true);
           setUnavailableDates([]);
-          setImageUrls(PRESET_GALLERIES[0].urls);
-          setAbout("I am a skilled hard-working labor professional. Ready to work today!");
+          setPhoto(defaultPhoto);
+          setImageUrls(defaultUrls);
+          setAbout(defaultAbout);
           setExistingCreatedAt(null);
+
+          setSavedSnapshot(
+            JSON.stringify({
+              name: "",
+              phone: "",
+              dailyRate: "",
+              experience: "",
+              locationName: defaultLoc.name,
+              latitude: defaultLoc.latitude,
+              longitude: defaultLoc.longitude,
+              skills: [],
+              skillProficiencies: {},
+              about: defaultAbout,
+              photo: defaultPhoto,
+              imageUrls: defaultUrls,
+              isAvailable: true,
+              unavailableDates: []
+            })
+          );
         }
       } catch (err) {
         // Log error but allow creation of new
         console.error("No worker profile found yet or permissions issue. Setting up default blank profile.");
+        setSavedSnapshot(
+          JSON.stringify({
+            name: "",
+            phone: "",
+            dailyRate: "",
+            experience: "",
+            locationName: TOWN_CENTERS[0].name,
+            latitude: TOWN_CENTERS[0].latitude,
+            longitude: TOWN_CENTERS[0].longitude,
+            skills: [],
+            skillProficiencies: {},
+            about: "",
+            photo: PRESET_AVATARS[0].url,
+            imageUrls: [],
+            isAvailable: true,
+            unavailableDates: []
+          })
+        );
       } finally {
         setLoading(false);
       }
@@ -313,25 +468,44 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
     const targetUrl = (urlToAdd || inputUrl).trim();
     if (!targetUrl) return;
 
+    if (imageUrls.length >= MAX_WORK_PHOTOS) {
+      setUrlError(t("photoLimitReachedError"));
+      setWorkPhotoError(t("photoLimitReachedError"));
+      return;
+    }
+
     if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://") && !targetUrl.startsWith("data:image/")) {
       setUrlError("Please enter a valid image web URL starting with https:// or http://");
       return;
     }
 
     if (imageUrls.includes(targetUrl)) {
-      setUrlError("This image URL has already been added to your showcase grid.");
+      setUrlError("This photo has already been added.");
       return;
     }
 
     setImageUrls([...imageUrls, targetUrl]);
     setInputUrl("");
     setUrlError("");
-    setSuccessMsg("Past work image URL added to showcase grid!");
-    setTimeout(() => setSuccessMsg(""), 3000);
+    setWorkPhotoError("");
   };
 
   const handleRemoveImageUrl = (indexToRemove: number) => {
     setImageUrls(imageUrls.filter((_, idx) => idx !== indexToRemove));
+    setWorkPhotoError("");
+    setUrlError("");
+  };
+
+  const syncSavedSnapshotPatch = (patch: Partial<{ isAvailable: boolean; unavailableDates: string[] }>) => {
+    setSavedSnapshot((prev) => {
+      if (!prev) return prev;
+      try {
+        const parsed = JSON.parse(prev);
+        return JSON.stringify({ ...parsed, ...patch });
+      } catch {
+        return prev;
+      }
+    });
   };
 
   // Handle instant toggle for availability
@@ -347,6 +521,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
           isAvailable: checked,
           updatedAt: serverTimestamp()
         }, { merge: true });
+        syncSavedSnapshotPatch({ isAvailable: checked });
         setSuccessMsg(`Availability updated to: ${checked ? "AVAILABLE TODAY" : "NOT AVAILABLE"}`);
         setTimeout(() => setSuccessMsg(""), 3500);
         onSaveSuccess();
@@ -375,6 +550,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
           unavailableDates: updatedDates,
           updatedAt: serverTimestamp()
         }, { merge: true });
+        syncSavedSnapshotPatch({ unavailableDates: updatedDates });
         setSuccessMsg(
           isCurrentlyUnavailable
             ? `Date ${formatDisplayDate(dateIso)} is now marked as AVAILABLE.`
@@ -421,6 +597,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
           unavailableDates: updatedDates,
           updatedAt: serverTimestamp()
         }, { merge: true });
+        syncSavedSnapshotPatch({ unavailableDates: updatedDates });
         setSuccessMsg(
           allWeekendMarked 
             ? "Upcoming weekend dates unmarked (now available)!" 
@@ -448,6 +625,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
           unavailableDates: [],
           updatedAt: serverTimestamp()
         }, { merge: true });
+        syncSavedSnapshotPatch({ unavailableDates: [] });
         setSuccessMsg("All unavailable dates cleared. You are listed as available on all days!");
         setTimeout(() => setSuccessMsg(""), 3500);
         onSaveSuccess();
@@ -472,7 +650,8 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
       try {
         const compressedBase64 = await compressAndConvertImage(e.target.files[0], 120, 120, 0.7);
         setPhoto(compressedBase64);
-        setSuccessMsg("Profile photo compressed and uploaded locally!");
+        setAvatarBroken(false);
+        setSuccessMsg("Profile photo uploaded!");
         setTimeout(() => setSuccessMsg(""), 3000);
       } catch (err) {
         setErrorMsg("Failed to upload image. Please try a smaller file.");
@@ -480,17 +659,162 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
     }
   };
 
-  // Handle local file upload converted to compressed base64 data-url and appended to imageUrls
+  // Handle multi-file local upload compressed in browser (max 1024px, JPEG ~0.7) up to 6 photos
   const handlePhotoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      try {
-        const compressedBase64 = await compressAndConvertImage(e.target.files[0], 600, 400, 0.75);
-        setImageUrls(prev => [...prev, compressedBase64]);
-        setSuccessMsg("Uploaded image added to past work showcase!");
-        setTimeout(() => setSuccessMsg(""), 3000);
-      } catch (err) {
-        setErrorMsg("Failed to upload image. Please try a smaller file.");
+    const fileList: File[] = e.target.files ? Array.from<File>(e.target.files) : [];
+    if (fileList.length === 0) return;
+
+    setWorkPhotoError("");
+    setUrlError("");
+
+    const remainingSlots = MAX_WORK_PHOTOS - imageUrls.length;
+    if (remainingSlots <= 0) {
+      setWorkPhotoError(t("photoLimitReachedError"));
+      e.target.value = "";
+      return;
+    }
+
+    const validFiles: File[] = [];
+    let firstError = "";
+
+    for (const file of fileList) {
+      const looksLikeImage =
+        file.type.startsWith("image/") ||
+        /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(file.name);
+      if (!looksLikeImage) {
+        if (!firstError) firstError = t("photoInvalidTypeError");
+        continue;
       }
+      if (file.size > MAX_RAW_IMAGE_BYTES) {
+        if (!firstError) firstError = t("photoTooLargeError");
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    const filesToProcess = validFiles.slice(0, remainingSlots);
+    if (validFiles.length > remainingSlots && !firstError) {
+      firstError = t("photoLimitReachedError");
+    }
+
+    if (filesToProcess.length === 0) {
+      setWorkPhotoError(firstError || t("photoInvalidTypeError"));
+      e.target.value = "";
+      return;
+    }
+
+    setIsUploadingWorkPhotos(true);
+    const compressedUrls: string[] = [];
+
+    try {
+      for (let i = 0; i < filesToProcess.length; i++) {
+        const file = filesToProcess[i];
+        setUploadProgressText(
+          filesToProcess.length > 1
+            ? `${t("addingPhotosBtn")} (${i + 1}/${filesToProcess.length})`
+            : t("addingPhotosBtn")
+        );
+        try {
+          let compressedBase64 = await compressAndConvertImage(file, 1024, 1024, 0.7);
+          // Safety re-compression if noisy photo is unusually large so Firestore doc stays small
+          if (compressedBase64.length > 220000) {
+            compressedBase64 = await compressAndConvertImage(file, 800, 800, 0.6);
+          }
+          compressedUrls.push(compressedBase64);
+        } catch {
+          if (!firstError) firstError = t("photoUploadFailedError");
+        }
+      }
+
+      if (compressedUrls.length > 0) {
+        setImageUrls((prev) => [...prev, ...compressedUrls].slice(0, MAX_WORK_PHOTOS));
+      }
+      if (firstError) {
+        setWorkPhotoError(firstError);
+      }
+    } finally {
+      setIsUploadingWorkPhotos(false);
+      setUploadProgressText("");
+      e.target.value = "";
+    }
+  };
+
+  // Bio suggestion chip tap helper (keeps user editable & enforces 200-char limit)
+  const handleTapBioSuggestion = (chipText: string) => {
+    setVoiceBioError("");
+    setAbout((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) {
+        return chipText.slice(0, MAX_BIO_LENGTH);
+      }
+      if (trimmed.includes(chipText)) {
+        return prev;
+      }
+      const combined = `${trimmed} ${chipText}`;
+      if (combined.length <= MAX_BIO_LENGTH) {
+        return combined;
+      }
+      return chipText.slice(0, MAX_BIO_LENGTH);
+    });
+  };
+
+  // Web Speech API voice typing helper for bio
+  const handleToggleVoiceBio = () => {
+    if (!SpeechRecognitionCtor) return;
+
+    if (isListeningBio && speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {
+        // ignore stop error
+      }
+      setIsListeningBio(false);
+      return;
+    }
+
+    try {
+      const langLocaleMap: Record<string, string> = {
+        en: "en-IN",
+        kn: "kn-IN",
+        ta: "ta-IN",
+        te: "te-IN",
+        hi: "hi-IN"
+      };
+      const recognition = new SpeechRecognitionCtor();
+      recognition.lang = langLocaleMap[language] || "en-IN";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results || [])
+          .map((res: any) => res?.[0]?.transcript || "")
+          .join(" ")
+          .trim();
+        if (transcript) {
+          setAbout((prev) => {
+            const trimmed = prev.trim();
+            const next = trimmed ? `${trimmed} ${transcript}` : transcript;
+            return next.slice(0, MAX_BIO_LENGTH);
+          });
+        }
+      };
+
+      recognition.onerror = () => {
+        setVoiceBioError(t("voiceError"));
+        setIsListeningBio(false);
+      };
+
+      recognition.onend = () => {
+        setIsListeningBio(false);
+      };
+
+      speechRecognitionRef.current = recognition;
+      setVoiceBioError("");
+      setIsListeningBio(true);
+      recognition.start();
+    } catch {
+      setVoiceBioError(t("voiceError"));
+      setIsListeningBio(false);
     }
   };
 
@@ -791,6 +1115,18 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
       return;
     }
 
+    const trimmedRate = dailyRate.trim();
+    const parsedRate = Number(trimmedRate);
+    if (!trimmedRate || !/^\d+$/.test(trimmedRate) || parsedRate <= 0) {
+      setDailyRateError(t("dailyRateRequiredError"));
+      setErrorMsg(t("dailyRateRequiredError"));
+      document.getElementById("editor-input-rate")?.focus();
+      return;
+    }
+
+    const parsedExperience = experience.trim() === "" ? 0 : Math.floor(Number(experience.trim()));
+
+    setDailyRateError("");
     setSaving(true);
     setErrorMsg("");
     setSuccessMsg("");
@@ -801,27 +1137,48 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
     const profilePath = `workers/${uid}`;
 
     const cleanImageUrls = imageUrls.map(url => url.trim()).filter(Boolean);
+    const normalizedProficiencies: Record<string, number> = { ...skillProficiencies };
+    skills.forEach((skill) => {
+      normalizedProficiencies[skill] = mapScoreToSkillLevel(normalizedProficiencies[skill]);
+    });
 
     const profileData: WorkerProfile = {
       uid,
       name: name.trim(),
       phone: phone.trim(),
       skills,
-      dailyRate: Number(dailyRate),
+      dailyRate: parsedRate,
       locationName: finalLocationName,
       latitude: finalLat,
       longitude: finalLng,
       isAvailable,
       unavailableDates: Array.from(new Set<string>(unavailableDates)).sort(),
       photo,
-      skillProficiencies,
+      skillProficiencies: normalizedProficiencies,
       imageUrls: cleanImageUrls,
       gallery: cleanImageUrls, // Maintain backwards compatibility with legacy gallery readers
-      experience: Number(experience),
-      about: about.trim() || "Professional skilled worker ready to fulfill daily wage tasks with dignity.",
+      experience: parsedExperience,
+      about: about.trim(),
       createdAt: existingCreatedAt || serverTimestamp(),
       updatedAt: serverTimestamp()
     };
+
+    const latestSnapshot = JSON.stringify({
+      name,
+      phone,
+      dailyRate,
+      experience,
+      locationName,
+      latitude,
+      longitude,
+      skills,
+      skillProficiencies,
+      about,
+      photo,
+      imageUrls,
+      isAvailable,
+      unavailableDates
+    });
 
     // If in demo mode, persist to local storage for realistic preview testing
     if (uid.startsWith("demo-") || uid.startsWith("mock-")) {
@@ -830,30 +1187,32 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
       } catch (e) {
         // ignore
       }
-      setSuccessMsg("🎉 Your professional worker identity has been saved successfully (Demo Mode)!");
+      setSavedSnapshot(latestSnapshot);
+      setSuccessMsg(t("yourProfileLiveToast"));
       setSaveSuccess(true);
+      setShowLiveToast(true);
       onSaveSuccess();
       setSaving(false);
-      setTimeout(() => setSuccessMsg(""), 4000);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => setSuccessMsg(""), 3000);
+      setTimeout(() => setShowLiveToast(false), 3000);
+      setTimeout(() => setSaveSuccess(false), 2000);
       return;
     }
 
     try {
       // Security rules will validate exact keys and format
       await setDoc(doc(db, profilePath), profileData);
-      setSuccessMsg("🎉 Your professional worker identity has been saved successfully!");
+      setSavedSnapshot(latestSnapshot);
+      setSuccessMsg(t("yourProfileLiveToast"));
       setSaveSuccess(true);
+      setShowLiveToast(true);
       onSaveSuccess();
-      setTimeout(() => setSuccessMsg(""), 4000);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => setSuccessMsg(""), 3000);
+      setTimeout(() => setShowLiveToast(false), 3000);
+      setTimeout(() => setSaveSuccess(false), 2000);
     } catch (err: any) {
       console.error("Profile save error:", err);
-      setErrorMsg(
-        language === "kn"
-          ? "ಪ್ರೊಫೈಲ್ ಉಳಿಸಲು ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಎಲ್ಲಾ ಅಗತ್ಯ ವಿವರಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೊಮ್ಮೆ ಪ್ರಯತ್ನಿಸಿ."
-          : err?.message || "Failed to save profile. Please check your network and try again."
-      );
+      setErrorMsg(t("couldNotSaveError"));
     } finally {
       setSaving(false);
     }
@@ -868,264 +1227,392 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
     );
   }
 
+  // Live profile completion calculation (8 equal-share fields)
+  const completionChecks = [
+    Boolean(photo && photo.trim().length > 0),
+    Boolean(name.trim().length > 0),
+    phone.replace(/\D/g, "").length >= 10,
+    Boolean(dailyRate.trim() && Number(dailyRate) > 0),
+    Boolean(locationName.trim().length > 0),
+    skills.length > 0,
+    Boolean(about.trim().length > 0),
+    imageUrls.length > 0
+  ];
+  const completedCount = completionChecks.filter(Boolean).length;
+  const completionPercent = Math.round((completedCount / completionChecks.length) * 100);
+
+  const currentSnapshot = JSON.stringify({
+    name,
+    phone,
+    dailyRate,
+    experience,
+    locationName,
+    latitude,
+    longitude,
+    skills,
+    skillProficiencies,
+    about,
+    photo,
+    imageUrls,
+    isAvailable,
+    unavailableDates
+  });
+  const hasUnsavedChanges = savedSnapshot !== "" && currentSnapshot !== savedSnapshot;
+
   return (
-    <div id="profile-editor-container" className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 max-w-2xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5 mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <UserCheck className="w-5 h-5 text-emerald-600" />
-            <span>{t("workerProfileHeader")}</span>
-          </h2>
-          <p className="text-sm text-slate-500">{t("workerProfileSub")}</p>
+    <div id="profile-editor-container" className="w-full max-w-2xl mx-auto box-border space-y-4 pb-24 sm:pb-28 overflow-x-clip">
+      {/* Live Toast Feedback ("Your profile is live") */}
+      <AnimatePresence>
+        {showLiveToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.2 }}
+            role="status"
+            data-testid="profile-live-toast"
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-emerald-900 text-white px-4 py-2.5 rounded-full shadow-lg border border-emerald-500/40 text-xs font-bold whitespace-nowrap"
+          >
+            <Check className="w-4 h-4 text-emerald-300 stroke-[3]" />
+            <span>{t("yourProfileLiveToast")}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Part 1A: Slim Live Profile Completion Progress Indicator */}
+      <div
+        id="profile-completion-bar"
+        data-testid="profile-completion-bar"
+        className="w-full max-w-full box-border bg-white rounded-2xl border border-slate-200 shadow-2xs p-3.5 sm:p-4"
+      >
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-xs sm:text-sm font-bold text-slate-900">
+            {t("profileWord")} {completionPercent}% {t("completeWord")}
+          </span>
+          <span className="text-[11px] font-mono font-semibold text-emerald-700">
+            {completedCount}/8 {t("fieldsWord")}
+          </span>
         </div>
-
-        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto flex-wrap">
-          {/* Quick Header Save Button */}
-          <button
-            type="button"
-            id="btn-header-save-profile"
-            onClick={(e) => {
-              handleSubmit(e as any);
-            }}
-            disabled={saving}
-            className={`flex items-center gap-1.5 font-bold text-xs px-3.5 py-2 rounded-xl transition cursor-pointer shadow-xs ${
-              saveSuccess
-                ? "bg-emerald-600 text-white"
-                : "bg-emerald-700 hover:bg-emerald-800 text-white active:scale-95"
-            }`}
-          >
-            {saving ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : saveSuccess ? (
-              <Check className="w-3.5 h-3.5" />
-            ) : (
-              <Save className="w-3.5 h-3.5" />
-            )}
-            <span>{saving ? t("savingProfile") : saveSuccess ? t("profileSaved") : t("saveProfile")}</span>
-          </button>
-
-          {/* Printable QR Code Button for Offline Marketing */}
-          <button
-            type="button"
-            id="btn-generate-printable-qr"
-            data-testid="generate-printable-qr-button"
-            onClick={handleOpenQrModal}
-            className="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/90 font-bold text-xs px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
-            title="Generate printable QR code linked to your unique profile URL for offline marketing"
-          >
-            <QrCode className="w-4 h-4 text-emerald-600" />
-            <span>{t("printableQrCode")}</span>
-          </button>
-
-          {/* Instant Availability switch (Highlight of success criteria) */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl shrink-0">
-            <span className="text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">{t("availabilityToggle")}</span>
-            <button
-              id="toggle-availability-main"
-              type="button"
-              onClick={() => handleAvailabilityToggle(!isAvailable)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden cursor-pointer ${
-                isAvailable ? "bg-emerald-600" : "bg-slate-300"
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  isAvailable ? "translate-x-6" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
+        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-emerald-600 rounded-full transition-all duration-300 ease-out"
+            style={{ width: `${completionPercent}%` }}
+          />
         </div>
       </div>
 
-      {successMsg && (
-        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2 animate-pulse">
+      {successMsg && !showLiveToast && (
+        <div className="w-full max-w-full box-border p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
           <Sparkles className="w-4 h-4 shrink-0" />
           <span>{successMsg}</span>
         </div>
       )}
 
       {errorMsg && (
-        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+        <div className="w-full max-w-full box-border p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{errorMsg}</span>
         </div>
       )}
 
       {/* Profile form */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        
-        {/* Profile Image & Gallery Block */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 bg-slate-50/50 p-4 border border-slate-200 rounded-xl">
-          
-          {/* Avatar setup */}
-          <div className="md:col-span-1 flex flex-col items-center">
-            <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-400 mb-2 text-center w-full">Identity Photo</h4>
-            <div className="relative group w-24 h-24 rounded-2xl overflow-hidden bg-slate-100 border-2 border-emerald-100">
-              <img src={photo} alt="Photo Preview" className="w-full h-full object-cover" />
-              <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold transition cursor-pointer">
-                <Upload className="w-5 h-5 mb-1" />
-                <span>Upload</span>
-                <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-              </label>
-            </div>
-            <p className="text-[10px] text-slate-500 mt-2 text-center">Click raw image or pick preset avatar below</p>
-          </div>
+      <form onSubmit={handleSubmit} className="w-full max-w-full box-border space-y-4">
+        {/* Part 1B: Always-Open Essentials Card ("Your basic details") */}
+        <div className="w-full max-w-full box-border bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-5">
+          <h2 className="text-base sm:text-lg font-extrabold text-slate-900 border-b border-slate-100 pb-3">
+            {t("yourBasicDetails")}
+          </h2>
 
-          {/* Quick Preset selection */}
-          <div className="md:col-span-3">
-            <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-400 mb-2">Popular Work Photos Presets</h4>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 sm:gap-2">
-              {PRESET_AVATARS.map((preset, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => {
-                    setPhoto(preset.url);
-                    // Match a logical past work photos result too if empty or switched!
-                    const galMatch = PRESET_GALLERIES.find(g => g.category === preset.category);
-                    if (galMatch && imageUrls.length === 0) setImageUrls(galMatch.urls);
-                  }}
-                  className={`relative rounded-lg overflow-hidden border-2 aspect-square bg-slate-100 transition duration-200 cursor-pointer ${
-                    photo === preset.url ? "border-emerald-500 scale-[1.05] shadow-sm" : "border-slate-200 hover:border-slate-350"
-                  }`}
-                >
-                  <img src={preset.url} alt={preset.label} className="w-full h-full object-cover" />
-                  {photo === preset.url && (
-                    <div className="absolute top-1 right-1 bg-emerald-600 text-white rounded-full p-0.5">
-                      <Check className="w-2.5 h-2.5" />
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Input Text Block */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Name */}
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
-              <User className="w-3.5 h-3.5 text-slate-400" /> Full Name
-            </label>
-            <input
-              type="text"
-              id="editor-input-name"
-              placeholder="e.g. Ramesh Kumar"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="mt-1.5 w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900"
-            />
-          </div>
-
-          {/* Phone */}
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
-              <Phone className="w-3.5 h-3.5 text-slate-400" /> Phone Number (Works with Customer Calls)
-            </label>
-            <input
-              type="tel"
-              id="editor-input-phone"
-              placeholder="e.g. 9876543210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-              className="mt-1.5 w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900"
-            />
-          </div>
-
-          {/* Daily rate */}
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
-              <DollarSign className="w-3.5 h-3.5 text-slate-400" /> Daily Rate (₹ Rupees / Day)
-            </label>
-            <input
-              type="number"
-              id="editor-input-rate"
-              placeholder="e.g. 600"
-              min={100}
-              max={5000}
-              value={dailyRate}
-              onChange={(e) => setDailyRate(Number(e.target.value))}
-              required
-              className="mt-1.5 w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900"
-            />
-          </div>
-
-          {/* Experience */}
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
-              <Briefcase className="w-3.5 h-3.5 text-slate-400" /> Years of Work Experience
-            </label>
-            <input
-              type="number"
-              id="editor-input-experience"
-              min={0}
-              max={50}
-              value={experience}
-              onChange={(e) => setExperience(Number(e.target.value))}
-              className="mt-1.5 w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900"
-            />
-          </div>
-
-          {/* Interactive Town Center & Custom/Live Location Section */}
-          <div className="md:col-span-2 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-800 uppercase font-mono tracking-wider block">
-                {t("locationHubSelect") || "Primary Base Hub / Town"}
-              </label>
-              <span className="text-[11px] text-slate-500">
-                Service area & discovery radius
+          {/* 1. Big, Easy-to-Tap "I am available for work today" Toggle at Top of Card */}
+          <div
+            onClick={() => handleAvailabilityToggle(!isAvailable)}
+            className={`w-full max-w-full box-border flex items-center justify-between gap-3 px-4 py-3.5 rounded-xl border transition-colors cursor-pointer select-none ${
+              isAvailable
+                ? "bg-emerald-50/90 border-emerald-200 text-emerald-950"
+                : "bg-slate-50 border-slate-200 text-slate-800"
+            }`}
+          >
+            <div className="min-w-0 flex-1">
+              <span className="text-sm font-bold block leading-snug">
+                {t("availabilityToggle")}
+              </span>
+              <span className={`text-[11px] font-medium block mt-0.5 ${isAvailable ? "text-emerald-700" : "text-slate-500"}`}>
+                {isAvailable ? t("readyForHireHint") : t("unavailableTodayHint")}
               </span>
             </div>
-
-            {/* 1. Compact Location Bar (Zomato / Swiggy / Urban Company style) */}
-            <div 
-              id="editor-compact-location-bar"
-              data-testid="compact-location-bar"
-              onClick={() => setShowLocationModal(true)}
-              className="bg-emerald-50/70 hover:bg-emerald-50 border border-emerald-200/90 hover:border-emerald-300 rounded-xl p-3 flex items-center justify-between gap-3 transition cursor-pointer group shadow-2xs"
+            <button
+              id="toggle-availability-main"
+              type="button"
+              role="switch"
+              aria-checked={isAvailable}
+              aria-label={t("availabilityToggle")}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAvailabilityToggle(!isAvailable);
+              }}
+              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-hidden cursor-pointer ${
+                isAvailable ? "bg-emerald-600" : "bg-slate-300"
+              }`}
             >
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-                  <MapPin className="w-4 h-4 fill-white text-white" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="block text-[10px] font-mono uppercase font-bold text-emerald-800 tracking-wider">
-                    {t("locationHubLabel") || "Your Location / Base Hub"}
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-xs transition-transform ${
+                  isAvailable ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* 2. Real Photo First + Optional Collapsed Sample Pictures */}
+          <div className="w-full max-w-full box-border bg-slate-50/50 p-4 border border-slate-200 rounded-xl space-y-3">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+              <div className="flex flex-col items-center shrink-0">
+                <span className="text-xs font-bold font-mono uppercase tracking-wider text-slate-500 mb-2">
+                  {t("yourPhotoLabel")}
+                </span>
+                <label className="relative group w-24 h-24 rounded-2xl overflow-hidden bg-slate-100 border-2 border-emerald-200 flex items-center justify-center cursor-pointer">
+                  {photo && !avatarBroken ? (
+                    <img
+                      src={photo}
+                      alt=""
+                      onError={() => setAvatarBroken(true)}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-9 h-9 text-slate-400" />
+                  )}
+                  <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold transition">
+                    <Camera className="w-5 h-5 mb-1" />
+                    <span>{t("addYourPhoto")}</span>
                   </span>
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span className="text-sm font-extrabold text-slate-900 truncate">
-                      {locationName}
-                    </span>
-                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wider shrink-0 ${
-                      locationSource === "live"
-                        ? "bg-blue-100 text-blue-800 border border-blue-200"
-                        : locationSource === "custom"
-                        ? "bg-purple-100 text-purple-800 border border-purple-200"
-                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                    }`}>
-                      {locationSource === "live" ? "Live GPS" : locationSource === "custom" ? "Custom Address" : "City Hub"}
-                    </span>
-                  </div>
-                </div>
+                  <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                </label>
               </div>
 
-              <button
-                type="button"
-                id="btn-editor-open-location-picker"
-                data-testid="change-location-button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowLocationModal(true);
+              <div className="flex-1 text-center sm:text-left space-y-2 pt-1 min-w-0">
+                <label className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer">
+                  <Camera className="w-4 h-4 shrink-0" />
+                  <span>{t("addYourPhoto")}</span>
+                  <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                </label>
+                <p className="text-xs text-slate-600 font-medium">
+                  {t("realPhotoHint")}
+                </p>
+                <button
+                  type="button"
+                  id="btn-toggle-sample-pictures"
+                  aria-expanded={showSampleAvatars}
+                  onClick={() => setShowSampleAvatars((prev) => !prev)}
+                  className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 underline underline-offset-2 cursor-pointer"
+                >
+                  {showSampleAvatars ? t("hideSamplePictures") : t("useSamplePictureInstead")}
+                </button>
+              </div>
+            </div>
+
+            {showSampleAvatars && (
+              <div className="pt-3 border-t border-slate-200/80">
+                <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-400 mb-2">
+                  {t("samplePicturesTitle")}
+                </h4>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 sm:gap-2">
+                  {PRESET_AVATARS.map((preset, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => {
+                        setPhoto(preset.url);
+                        setAvatarBroken(false);
+                        const galMatch = PRESET_GALLERIES.find(g => g.category === preset.category);
+                        if (galMatch && imageUrls.length === 0) setImageUrls(galMatch.urls);
+                      }}
+                      title={preset.label}
+                      aria-label={preset.label}
+                      className={`relative rounded-lg overflow-hidden border-2 aspect-square bg-slate-100 flex items-center justify-center transition duration-200 cursor-pointer ${
+                        photo === preset.url ? "border-emerald-500 scale-[1.05] shadow-sm" : "border-slate-200 hover:border-slate-350"
+                      }`}
+                    >
+                      {!brokenPresets[preset.url] ? (
+                        <img
+                          src={preset.url}
+                          alt=""
+                          onError={() =>
+                            setBrokenPresets((prev) => ({ ...prev, [preset.url]: true }))
+                          }
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User className="w-6 h-6 text-slate-400" />
+                      )}
+                      {photo === preset.url && (
+                        <div className="absolute top-1 right-1 bg-emerald-600 text-white rounded-full p-0.5">
+                          <Check className="w-2.5 h-2.5" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input Text Block */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Name */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
+                <User className="w-3.5 h-3.5 text-slate-400" /> {t("yourFullName")}
+              </label>
+              <input
+                type="text"
+                id="editor-input-name"
+                placeholder={t("namePlaceholder")}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                className="mt-1.5 w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900"
+              />
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
+                <Phone className="w-3.5 h-3.5 text-slate-400" /> {t("phoneNumber")}
+              </label>
+              <input
+                type="tel"
+                id="editor-input-phone"
+                placeholder={t("phonePlaceholder")}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+                className="mt-1.5 w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900"
+              />
+            </div>
+
+            {/* Daily rate */}
+            <div>
+              <label htmlFor="editor-input-rate" className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
+                <DollarSign className="w-3.5 h-3.5 text-slate-400" /> {t("dailyWageRate")}
+              </label>
+              <div className="relative mt-1.5">
+                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500 select-none">
+                  ₹
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  id="editor-input-rate"
+                  placeholder="e.g. 800"
+                  value={dailyRate}
+                  onChange={(e) => {
+                    const digitsOnly = e.target.value.replace(/\D/g, "");
+                    const sanitized = digitsOnly.replace(/^0+/, "");
+                    setDailyRate(sanitized);
+                    if (dailyRateError) setDailyRateError("");
+                  }}
+                  aria-invalid={Boolean(dailyRateError)}
+                  aria-describedby={dailyRateError ? "editor-input-rate-error" : undefined}
+                  className={`w-full bg-white border rounded-xl pl-8 pr-4 py-3 text-sm focus:ring-2 focus:outline-hidden text-slate-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                    dailyRateError
+                      ? "border-rose-400 focus:ring-rose-500"
+                      : "border-slate-200 focus:ring-emerald-500"
+                  }`}
+                />
+              </div>
+              {dailyRateError && (
+                <p
+                  id="editor-input-rate-error"
+                  data-testid="daily-rate-error"
+                  className="mt-1.5 text-xs font-medium text-rose-600 flex items-center gap-1"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{dailyRateError}</span>
+                </p>
+              )}
+            </div>
+
+            {/* Experience */}
+            <div>
+              <label htmlFor="editor-input-experience" className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
+                <Briefcase className="w-3.5 h-3.5 text-slate-400" /> {t("workExperience")}
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                id="editor-input-experience"
+                placeholder="e.g. 3"
+                value={experience}
+                onChange={(e) => {
+                  const digitsOnly = e.target.value.replace(/\D/g, "");
+                  if (digitsOnly === "") {
+                    setExperience("");
+                    return;
+                  }
+                  const sanitized = digitsOnly.replace(/^0+(?=\d)/, "");
+                  setExperience(sanitized);
                 }}
-                className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-white group-hover:bg-emerald-700 group-hover:text-white border border-emerald-300 group-hover:border-emerald-700 px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0 cursor-pointer"
+                className="mt-1.5 w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+
+            {/* Interactive Location Section */}
+            <div className="md:col-span-2 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label className="text-xs font-bold text-slate-800 uppercase font-mono tracking-wider block">
+                  {t("locationHubSelect")}
+                </label>
+                <span className="text-[11px] text-slate-500">
+                  {t("serviceAreaHint")}
+                </span>
+              </div>
+
+              {/* 1. Compact Location Bar */}
+              <div 
+                id="editor-compact-location-bar"
+                data-testid="compact-location-bar"
+                onClick={() => setShowLocationModal(true)}
+                className="w-full max-w-full box-border bg-emerald-50/70 hover:bg-emerald-50 border border-emerald-200/90 hover:border-emerald-300 rounded-xl p-3 flex items-center justify-between gap-2.5 sm:gap-3 transition cursor-pointer group shadow-2xs"
               >
-                <span>Change</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                    <MapPin className="w-4 h-4 fill-white text-white" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[10px] font-mono uppercase font-bold text-emerald-800 tracking-wider">
+                      {t("locationHubLabel")}
+                    </span>
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="text-sm font-extrabold text-slate-900 truncate">
+                        {locationName}
+                      </span>
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wider shrink-0 ${
+                        locationSource === "live"
+                          ? "bg-blue-100 text-blue-800 border border-blue-200"
+                          : locationSource === "custom"
+                          ? "bg-purple-100 text-purple-800 border border-purple-200"
+                          : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                      }`}>
+                        {locationSource === "live" ? "Live GPS" : locationSource === "custom" ? "Custom" : "City"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  id="btn-editor-open-location-picker"
+                  data-testid="change-location-button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowLocationModal(true);
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-white group-hover:bg-emerald-700 group-hover:text-white border border-emerald-300 group-hover:border-emerald-700 px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0 cursor-pointer"
+                >
+                  <span>{t("changeButton")}</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
 
               {/* Hidden select to preserve data-testid for automated test suites */}
               <select
@@ -1511,515 +1998,988 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
           </div>
         </div>
 
-        {/* Custom skills tagging */}
-        <div className="space-y-4">
+        {/* 8. Select Skills (inside Your basic details card) */}
           <div>
-            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-605 text-slate-600 uppercase font-mono tracking-wider">
-              <Zap className="w-3.5 h-3.5 text-slate-400" /> Select Skills
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
+              <Zap className="w-3.5 h-3.5 text-slate-400" /> {t("selectSkillsLabel")}
             </label>
-            <ChipGroup selectedSkills={skills} onChange={setSkills} />
+            <ChipGroup
+              selectedSkills={skills}
+              onChange={(nextSkills) => {
+                setSkills(nextSkills);
+                setSkillProficiencies((prev) => {
+                  const next = { ...prev };
+                  nextSkills.forEach((skill) => {
+                    if (typeof next[skill] !== "number") {
+                      next[skill] = 80; // Default newly selected skill to Experienced
+                    }
+                  });
+                  return next;
+                });
+              }}
+            />
           </div>
-
-          {/* Recharts Skill Proficiency Radar Chart */}
-          <SkillRadarChart
-            skills={skills}
-            skillProficiencies={skillProficiencies}
-            onChangeProficiency={(skill, val) => {
-              setSkillProficiencies((prev) => ({
-                ...prev,
-                [skill]: val
-              }));
-            }}
-            isEditable={true}
-            experienceYears={experience}
-          />
         </div>
 
-        {/* About work description */}
-        <div>
-          <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider mb-1">
-            <FileText className="w-3.5 h-3.5 text-slate-400" /> About Your Work/Experience Bio
-          </label>
-          <textarea
-            id="editor-input-about"
-            rows={3}
-            value={about}
-            onChange={(e) => setAbout(e.target.value)}
-            placeholder="Introduce yourself to patrons..."
-            className="w-full bg-white border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900"
-          />
-        </div>
-
-        {/* Past Work Showcase Image URLs & Photo Grid */}
-        <div className="space-y-4 bg-slate-50 p-5 border border-slate-200 rounded-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-            <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-              <ImageIcon className="w-4 h-4 text-emerald-600" />
-              <span>Past Work Photo Showcase (imageUrls)</span>
-              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold ml-1">
-                {imageUrls.length} {imageUrls.length === 1 ? "Photo" : "Photos"}
-              </span>
-            </h4>
-            <span className="text-[11px] text-slate-400">
-              Displayed as a photo grid on your public WorkerCard
-            </span>
+        {/* Part 1C: Optional Sections Under "Add more to get more calls" */}
+        <div className="space-y-3 pt-1">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">
+              {t("addMoreToGetCalls")}
+            </h3>
+            <span className="text-[11px] text-slate-400 font-medium">{t("optionalTag")}</span>
           </div>
 
-          {/* URL Input Box */}
-          <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2.5">
-            <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
-              <Link className="w-3.5 h-3.5 text-slate-400" />
-              <span>Enter Past Work Image URL:</span>
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="url"
-                id="input-past-work-image-url"
-                placeholder="https://images.unsplash.com/... or paste image URL"
-                value={inputUrl}
-                onChange={(e) => {
-                  setInputUrl(e.target.value);
-                  if (urlError) setUrlError("");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddImageUrl();
-                  }
-                }}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-              />
-              <button
-                type="button"
-                id="btn-add-image-url"
-                onClick={() => handleAddImageUrl()}
-                className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Photo URL</span>
-              </button>
-            </div>
-
-            {urlError && (
-              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>{urlError}</span>
-              </p>
-            )}
-
-            {/* Quick 1-click sample presets */}
-            <div className="pt-2.5 border-t border-slate-100">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                Quick Sample Presets (Click to add to showcase):
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {SAMPLE_WORK_URLS.map((sample, sIdx) => (
-                  <button
-                    key={sIdx}
-                    type="button"
-                    onClick={() => handleAddImageUrl(sample.url)}
-                    className="text-[11px] bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 border border-slate-200 text-slate-650 px-2.5 py-1 rounded-lg transition cursor-pointer font-medium"
-                  >
-                    + {sample.label}
-                  </button>
-                ))}
+          {/* Accordion 1: About your work (Bio) */}
+          <div className="w-full max-w-full box-border bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <button
+              type="button"
+              id="accordion-toggle-about"
+              aria-expanded={expandedSections.about}
+              aria-controls="accordion-panel-about"
+              onClick={() => toggleAccordionSection("about")}
+              className="w-full flex items-center justify-between gap-3 p-3.5 sm:p-4 text-left hover:bg-slate-50/80 transition cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-900">{t("aboutYourWorkTitle")}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                      about.trim().length > 0
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-slate-100 text-slate-600 border-slate-200"
+                    }`}>
+                      {about.trim().length > 0 ? t("doneTag") : t("optionalTag")}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                    {t("aboutYourWorkHint")}
+                  </p>
+                </div>
               </div>
-            </div>
+              {expandedSections.about ? (
+                <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+              )}
+            </button>
 
-            {/* Local File upload option */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">Or upload a photo directly from your device:</span>
-              <label className="inline-flex items-center gap-1 text-xs text-emerald-700 hover:text-emerald-800 font-bold cursor-pointer">
-                <Upload className="w-3.5 h-3.5" />
-                <span>Upload Local File</span>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handlePhotoFileUpload} 
-                  className="hidden" 
-                />
-              </label>
-            </div>
-          </div>
-
-          {/* Photo Grid Preview of imageUrls */}
-          {imageUrls.length === 0 ? (
-            <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl bg-white p-4">
-              <ImageIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-              <p className="text-xs font-bold text-slate-600">No past work photos added yet</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Paste an image URL above or click one of the quick samples to show customers your workmanship.
-              </p>
-            </div>
-          ) : (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
-                  Current Photo Grid ({imageUrls.length})
-                </span>
-                <span className="text-[10px] text-slate-400 italic">
-                  Hover photo to remove or view full URL
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {imageUrls.map((url, idx) => (
-                  <div 
-                    key={idx}
-                    className="relative group rounded-xl overflow-hidden bg-white border border-slate-200 shadow-2xs aspect-video flex flex-col justify-between"
-                  >
-                    <img 
-                      src={url} 
-                      alt={`Past work sample #${idx + 1}`}
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300";
-                      }}
-                      className="w-full h-full object-cover"
-                    />
-
-                    {/* Gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/30 opacity-90 group-hover:opacity-100 transition-opacity" />
-
-                    {/* Top index badge and remove button */}
-                    <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-10">
-                      <span className="bg-black/60 text-white text-[10px] font-mono font-bold px-1.5 py-0.5 rounded backdrop-blur-xs">
-                        #{idx + 1}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveImageUrl(idx)}
-                        title="Remove photo from showcase"
-                        aria-label="Remove photo"
-                        className="p-1.5 bg-rose-600/90 hover:bg-rose-600 text-white rounded-lg shadow-sm transition active:scale-95 cursor-pointer"
+            <AnimatePresence initial={false}>
+              {expandedSections.about && (
+                <motion.div
+                  id="accordion-panel-about"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  className="overflow-hidden border-t border-slate-100"
+                >
+                  <div className="p-4 sm:p-5 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <label htmlFor="editor-input-about" className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase font-mono tracking-wider">
+                        <FileText className="w-3.5 h-3.5 text-slate-400" /> {t("aboutBio")}
+                      </label>
+                      <span
+                        data-testid="bio-char-counter"
+                        className={`text-[11px] font-mono font-semibold ${
+                          about.length >= MAX_BIO_LENGTH
+                            ? "text-amber-600"
+                            : "text-slate-400"
+                        }`}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                        {about.length}/{MAX_BIO_LENGTH}
+                      </span>
                     </div>
 
-                    {/* Bottom URL snippet */}
-                    <div className="absolute bottom-2 left-2 right-2 z-10 flex items-center justify-between text-[10px] text-slate-200 font-mono">
-                      <span className="truncate max-w-[85%]">{url}</span>
-                      <a 
-                        href={url} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        title="Open image in new tab"
-                        className="text-white hover:text-emerald-300 ml-1"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                    <div className="flex items-start gap-2">
+                      <textarea
+                        id="editor-input-about"
+                        rows={3}
+                        maxLength={MAX_BIO_LENGTH}
+                        value={about}
+                        onChange={(e) => setAbout(e.target.value.slice(0, MAX_BIO_LENGTH))}
+                        placeholder={t("aboutPlaceholder")}
+                        className="flex-1 min-w-0 bg-white border border-slate-200 rounded-xl p-3.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900"
+                      />
+                      {isSpeechSupported && (
+                        <button
+                          type="button"
+                          id="btn-voice-bio"
+                          data-testid="voice-bio-button"
+                          onClick={handleToggleVoiceBio}
+                          aria-pressed={isListeningBio}
+                          aria-label={isListeningBio ? t("voiceTypeStop") : t("voiceTypeStart")}
+                          title={isListeningBio ? t("voiceTypeStop") : t("voiceTypeStart")}
+                          className={`shrink-0 w-11 h-11 rounded-xl border flex items-center justify-center transition cursor-pointer active:scale-95 ${
+                            isListeningBio
+                              ? "bg-rose-600 border-rose-600 text-white animate-pulse shadow-sm"
+                              : "bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700"
+                          }`}
+                        >
+                          {isListeningBio ? (
+                            <MicOff className="w-5 h-5" />
+                          ) : (
+                            <Mic className="w-5 h-5" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {isListeningBio && (
+                      <p className="text-xs font-semibold text-rose-600 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                        <span>{t("voiceListening")}</span>
+                      </p>
+                    )}
+
+                    {voiceBioError && (
+                      <p className="text-xs text-rose-600 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{voiceBioError}</span>
+                      </p>
+                    )}
+
+                    {/* 3 tappable suggestion chips based on selected main skill */}
+                    <div className="space-y-1.5 pt-0.5">
+                      <span className="text-[11px] font-semibold text-slate-500 block">
+                        {t("bioSuggestionsLabel")}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5" data-testid="bio-suggestion-chips">
+                        {getBioSuggestions(skills[0], language).map((suggestion, idx) => {
+                          const isAdded = about.includes(suggestion);
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleTapBioSuggestion(suggestion)}
+                              className={`max-w-full text-left text-xs px-3 py-1.5 rounded-lg border transition cursor-pointer active:scale-95 break-words ${
+                                isAdded
+                                  ? "bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold"
+                                  : "bg-slate-50 hover:bg-emerald-50 border-slate-200 hover:border-emerald-300 text-slate-700"
+                              }`}
+                            >
+                              + {suggestion}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Toggle-based Date-Picker for Upcoming Availability & Leave Schedule */}
-        <div 
-          id="date-picker-availability-section" 
-          data-testid="date-picker-availability-section"
-          className="space-y-4 bg-slate-50 p-5 border border-slate-200 rounded-2xl"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
-            <div>
-              <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <CalendarDays className="w-4 h-4 text-emerald-600" />
-                <span>{t("scheduleLeave")}</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ml-1 ${
-                  unavailableDates.length > 0 
-                    ? "bg-rose-100 text-rose-800 border border-rose-200" 
-                    : "bg-emerald-100 text-emerald-850 border border-emerald-200"
-                }`}>
-                  {unavailableDates.length > 0 
-                    ? `${unavailableDates.length} ${t("markedBusy")}` 
-                    : t("availableForHire")}
-                </span>
-              </h4>
-              <p className="text-xs text-slate-500 mt-1">
-                {t("datePickerHelper")}
-              </p>
-            </div>
-
-            {/* Quick Helper Actions */}
-            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-              <button
-                type="button"
-                id="btn-mark-tomorrow-busy"
-                onClick={handleMarkTomorrow}
-                className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 shadow-2xs transition cursor-pointer flex items-center gap-1"
-                title="Toggle tomorrow as busy or available"
-              >
-                <Clock className="w-3 h-3 text-amber-500" />
-                <span>{t("markTomorrowBusy")}</span>
-              </button>
-
-              <button
-                type="button"
-                id="btn-mark-weekend-busy"
-                onClick={handleMarkWeekend}
-                className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 shadow-2xs transition cursor-pointer flex items-center gap-1"
-                title="Toggle upcoming weekend days"
-              >
-                <Calendar className="w-3 h-3 text-sky-500" />
-                <span>{t("markWeekendBusy")}</span>
-              </button>
-
-              {unavailableDates.length > 0 && (
-                <button
-                  type="button"
-                  id="btn-clear-all-dates"
-                  onClick={handleClearAllDates}
-                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 shadow-2xs transition cursor-pointer flex items-center gap-1"
-                  title="Clear all marked unavailable dates"
-                >
-                  <Trash2 className="w-3 h-3 text-rose-500" />
-                  <span>{t("clearAllDates")}</span>
-                </button>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
           </div>
 
-          {/* 14-Day Interactive Toggle Grid */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                <CalendarCheck className="w-3 h-3 text-emerald-600" />
-                <span>Upcoming 14 Days (Click to toggle busy / free)</span>
-              </span>
-              <span className="text-[10px] text-slate-400">
-                Red = Busy • White/Green = Available
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
-              {getUpcomingDays(14).map((day) => {
-                const isMarkedUnavailable = unavailableDates.includes(day.iso);
-                return (
-                  <button
-                    key={day.iso}
-                    type="button"
-                    id={`toggle-date-${day.iso}`}
-                    data-testid={`toggle-date-${day.iso}`}
-                    onClick={() => handleToggleUnavailableDate(day.iso)}
-                    className={`relative flex flex-col items-center justify-between p-2.5 rounded-xl border text-center transition-all cursor-pointer select-none active:scale-95 shadow-2xs ${
-                      isMarkedUnavailable
-                        ? "bg-rose-50/90 border-rose-300 ring-2 ring-rose-400/20 text-rose-950 shadow-xs"
-                        : "bg-white border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30 text-slate-800"
-                    }`}
-                  >
-                    {/* Relative Badge (Today/Tomorrow) */}
-                    <div className="flex items-center justify-between w-full mb-1">
-                      <span className={`text-[9px] font-bold font-mono uppercase px-1 rounded ${
-                        day.isToday 
-                          ? "bg-emerald-600 text-white" 
-                          : day.isTomorrow 
-                            ? "bg-amber-100 text-amber-800 border border-amber-200" 
-                            : day.isWeekend 
-                              ? "bg-slate-100 text-slate-500" 
-                              : "text-slate-400"
-                      }`}>
-                        {day.isToday ? t("today") : day.isTomorrow ? t("tomorrow") : day.dayName}
-                      </span>
-
-                      {isMarkedUnavailable ? (
-                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" title="Marked as Busy" />
-                      ) : (
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" title="Available for work" />
-                      )}
-                    </div>
-
-                    {/* Day number & Month */}
-                    <div className="my-0.5">
-                      <span className={`text-base font-extrabold block leading-none ${
-                        isMarkedUnavailable ? "text-rose-700 line-through decoration-rose-500/70" : "text-slate-900"
-                      }`}>
-                        {day.dayNumber}
-                      </span>
-                      <span className="text-[10px] font-semibold text-slate-500 uppercase font-mono">
-                        {day.monthName}
-                      </span>
-                    </div>
-
-                    {/* Status Pill */}
-                    <div className={`mt-1.5 w-full py-0.5 px-1 rounded-md text-[9px] font-bold flex items-center justify-center gap-1 ${
-                      isMarkedUnavailable 
-                        ? "bg-rose-600 text-white" 
-                        : "bg-slate-100 text-slate-600 hover:bg-emerald-100 hover:text-emerald-800"
+          {/* Accordion 2: Photos of your past work */}
+          <div className="w-full max-w-full box-border bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <button
+              type="button"
+              id="accordion-toggle-portfolio"
+              aria-expanded={expandedSections.portfolio}
+              aria-controls="accordion-panel-portfolio"
+              onClick={() => toggleAccordionSection("portfolio")}
+              className="w-full flex items-center justify-between gap-3 p-3.5 sm:p-4 text-left hover:bg-slate-50/80 transition cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <ImageIcon className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-900">{t("pastWorkPhotosTitle")}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                      imageUrls.length > 0
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-slate-100 text-slate-600 border-slate-200"
                     }`}>
-                      {isMarkedUnavailable ? (
-                        <>
-                          <Ban className="w-2.5 h-2.5 shrink-0" />
-                          <span>Busy</span>
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-                          <span>Free</span>
-                        </>
+                      {imageUrls.length > 0 ? t("doneTag") : t("optionalTag")}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                    {t("pastWorkPhotosHint")} ({imageUrls.length} {t("ofWord")} {MAX_WORK_PHOTOS})
+                  </p>
+                </div>
+              </div>
+              {expandedSections.portfolio ? (
+                <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+              )}
+            </button>
+
+            <AnimatePresence initial={false}>
+              {expandedSections.portfolio && (
+                <motion.div
+                  id="accordion-panel-portfolio"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  className="overflow-hidden border-t border-slate-100"
+                >
+                  <div className="space-y-4 bg-slate-50/70 p-4 sm:p-5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-xs text-slate-500">
+                        {t("pastWorkCustomersSee")}
+                      </span>
+                      <span
+                        data-testid="work-photos-count"
+                        className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full"
+                      >
+                        {imageUrls.length} {t("ofWord")} {MAX_WORK_PHOTOS} {t("photosLowerWord")}
+                      </span>
+                    </div>
+
+                    {/* Part A1: Primary Upload-First Large Button */}
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="input-work-photos-upload"
+                        className={`w-full flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-xl text-sm font-bold shadow-xs transition ${
+                          imageUrls.length >= MAX_WORK_PHOTOS || isUploadingWorkPhotos
+                            ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                            : "bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white cursor-pointer"
+                        }`}
+                      >
+                        {isUploadingWorkPhotos ? (
+                          <Loader2 className="w-5 h-5 animate-spin shrink-0" />
+                        ) : (
+                          <Camera className="w-5 h-5 shrink-0" />
+                        )}
+                        <span>
+                          {isUploadingWorkPhotos
+                            ? uploadProgressText || t("addingPhotosBtn")
+                            : t("addPhotosBtn")}
+                        </span>
+                        <input
+                          id="input-work-photos-upload"
+                          data-testid="work-photos-file-input"
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          disabled={imageUrls.length >= MAX_WORK_PHOTOS || isUploadingWorkPhotos}
+                          onChange={handlePhotoFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {imageUrls.length >= MAX_WORK_PHOTOS && (
+                        <p className="text-xs font-medium text-slate-500 text-center">
+                          {t("maxPhotosReachedHint")}
+                        </p>
+                      )}
+
+                      {workPhotoError && (
+                        <div
+                          role="alert"
+                          data-testid="work-photo-error"
+                          className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center justify-between gap-2"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            <span>{workPhotoError}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setWorkPhotoError("")}
+                            aria-label="Dismiss"
+                            className="text-rose-500 hover:text-rose-800 shrink-0 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       )}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
+
+                    {/* Part A4: Clean 3-column Thumbnail Grid with always-visible ✕ button */}
+                    {imageUrls.length === 0 ? (
+                      <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl bg-white p-4">
+                        <ImageIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs font-bold text-slate-600">{t("noPastWorkPhotos")}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {t("noPastWorkPhotosHint")}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2.5 sm:gap-3" data-testid="work-photos-grid">
+                        {imageUrls.map((url, idx) => {
+                          const isBroken = Boolean(brokenPortfolioUrls[url]);
+                          return (
+                            <div
+                              key={idx}
+                              className="relative rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shadow-2xs aspect-square flex items-center justify-center"
+                            >
+                              {!isBroken ? (
+                                <img
+                                  src={url}
+                                  alt=""
+                                  referrerPolicy="no-referrer"
+                                  onError={() =>
+                                    setBrokenPortfolioUrls((prev) => ({ ...prev, [url]: true }))
+                                  }
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex flex-col items-center justify-center text-slate-400">
+                                  <ImageIcon className="w-6 h-6" />
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImageUrl(idx)}
+                                title={t("removePhotoLabel")}
+                                aria-label={t("removePhotoLabel")}
+                                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/75 hover:bg-rose-600 text-white flex items-center justify-center shadow-sm transition active:scale-95 cursor-pointer z-10"
+                              >
+                                <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Part A5: Collapsed "Advanced: add using a link" section */}
+                    <div className="pt-1 border-t border-slate-200/70">
+                      <button
+                        type="button"
+                        id="btn-toggle-advanced-photo-link"
+                        aria-expanded={showAdvancedPhotoLink}
+                        onClick={() => setShowAdvancedPhotoLink((prev) => !prev)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 py-1 cursor-pointer"
+                      >
+                        <Link className="w-3.5 h-3.5 shrink-0" />
+                        <span>{t("advancedAddLinkToggle")}</span>
+                        {showAdvancedPhotoLink ? (
+                          <ChevronUp className="w-3.5 h-3.5 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                        )}
+                      </button>
+
+                      {showAdvancedPhotoLink && (
+                        <div className="mt-2.5 bg-white p-3.5 rounded-xl border border-slate-200 space-y-3">
+                          <div className="space-y-2">
+                            <label
+                              htmlFor="input-past-work-image-url"
+                              className="text-xs font-semibold text-slate-600 flex items-center gap-1"
+                            >
+                              <Link className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{t("addPhotoLinkLabel")}</span>
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="url"
+                                id="input-past-work-image-url"
+                                placeholder={t("addPhotoLinkPlaceholder")}
+                                value={inputUrl}
+                                disabled={imageUrls.length >= MAX_WORK_PHOTOS}
+                                onChange={(e) => {
+                                  setInputUrl(e.target.value);
+                                  if (urlError) setUrlError("");
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleAddImageUrl();
+                                  }
+                                }}
+                                className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden disabled:opacity-60"
+                              />
+                              <button
+                                type="button"
+                                id="btn-add-image-url"
+                                disabled={imageUrls.length >= MAX_WORK_PHOTOS}
+                                onClick={() => handleAddImageUrl()}
+                                className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition cursor-pointer shrink-0 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>{t("addPhotoBtn")}</span>
+                              </button>
+                            </div>
+
+                            {urlError && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                <span>{urlError}</span>
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="pt-2.5 border-t border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                              {t("quickSamplePhotosLabel")}:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {SAMPLE_WORK_URLS.map((sample, sIdx) => (
+                                <button
+                                  key={sIdx}
+                                  type="button"
+                                  disabled={imageUrls.length >= MAX_WORK_PHOTOS}
+                                  onClick={() => handleAddImageUrl(sample.url)}
+                                  className="text-[11px] bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 border border-slate-200 text-slate-650 px-2.5 py-1 rounded-lg transition cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  + {sample.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* Custom Date Input for Any Future Date */}
-          <div className="pt-2 border-t border-slate-200/70 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2">
-              <label htmlFor="custom-date-picker" className="text-[11px] font-bold text-slate-600 whitespace-nowrap flex items-center gap-1 font-mono">
-                <CalendarX className="w-3.5 h-3.5 text-rose-500" />
-                <span>{t("addSpecificDate")}:</span>
-              </label>
-              <input
-                type="date"
-                id="custom-date-picker"
-                min={formatDateToISO(new Date())}
-                value={customDateInput}
-                onChange={(e) => setCustomDateInput(e.target.value)}
-                className="bg-white border border-slate-200 hover:border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-              />
-              <button
-                type="button"
-                id="btn-add-custom-date"
-                disabled={!customDateInput}
-                onClick={handleAddCustomDate}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white rounded-lg text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed shadow-2xs"
-              >
-                {t("addDateButton")}
-              </button>
-            </div>
+          {/* Accordion 3: Skill level */}
+          <div className="w-full max-w-full box-border bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <button
+              type="button"
+              id="accordion-toggle-skillLevel"
+              aria-expanded={expandedSections.skillLevel}
+              aria-controls="accordion-panel-skillLevel"
+              onClick={() => toggleAccordionSection("skillLevel")}
+              className="w-full flex items-center justify-between gap-3 p-3.5 sm:p-4 text-left hover:bg-slate-50/80 transition cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-900">{t("skillLevelTitle")}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                      skills.length > 0 && skills.some((s) => typeof skillProficiencies[s] === "number")
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-slate-100 text-slate-600 border-slate-200"
+                    }`}>
+                      {skills.length > 0 && skills.some((s) => typeof skillProficiencies[s] === "number") ? t("doneTag") : t("optionalTag")}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                    {t("skillLevelHint")}
+                  </p>
+                </div>
+              </div>
+              {expandedSections.skillLevel ? (
+                <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+              )}
+            </button>
 
-            {/* Marked Unavailable Dates Summary Chips */}
-            {unavailableDates.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] font-mono font-bold uppercase text-slate-400">
-                  {t("markedDatesCount")} ({unavailableDates.length}):
-                </span>
-                {unavailableDates.slice(0, 5).map((iso) => (
-                  <span
-                    key={iso}
-                    className="inline-flex items-center gap-1 bg-white border border-rose-200 text-rose-800 px-2 py-0.5 rounded-lg text-[10px] font-bold shadow-2xs"
-                  >
-                    <span>{formatDisplayDate(iso)}</span>
+            <AnimatePresence initial={false}>
+              {expandedSections.skillLevel && (
+                <motion.div
+                  id="accordion-panel-skillLevel"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  className="overflow-hidden border-t border-slate-100"
+                >
+                  <div className="p-4 sm:p-5 bg-slate-50/50 space-y-3" data-testid="simple-skill-level-section">
+                    {skills.length === 0 ? (
+                      <div className="py-7 px-4 text-center bg-white rounded-xl border border-dashed border-slate-200">
+                        <p className="text-xs font-bold text-slate-700">
+                          {t("selectSkillsFirstForRadar")}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
+                          {t("pickSkillHintForLevel")}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {skills.map((skill) => {
+                          const selectedLevel = mapScoreToSkillLevel(skillProficiencies[skill]);
+                          const skillSlug = skill.toLowerCase().replace(/[^a-z0-9]/g, "-");
+
+                          return (
+                            <div
+                              key={skill}
+                              id={`skill-level-row-${skillSlug}`}
+                              className="w-full max-w-full box-border bg-white rounded-xl border border-slate-200 p-3 sm:p-3.5 shadow-2xs space-y-2.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm font-bold text-slate-900 break-words">{skill}</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-1.5 sm:gap-2 w-full max-w-full box-border">
+                                {SKILL_LEVEL_OPTIONS.map((opt) => {
+                                  const isSelected = selectedLevel === opt.score;
+                                  return (
+                                    <button
+                                      key={opt.score}
+                                      type="button"
+                                      id={`btn-skill-${skillSlug}-${opt.score}`}
+                                      data-testid={`skill-level-${skillSlug}-${opt.score}`}
+                                      aria-pressed={isSelected}
+                                      onClick={() =>
+                                        setSkillProficiencies((prev) => ({
+                                          ...prev,
+                                          [skill]: opt.score
+                                        }))
+                                      }
+                                      className={`min-w-0 w-full py-2.5 px-1 sm:px-2 rounded-xl text-[11px] sm:text-sm font-bold leading-tight break-words border transition active:scale-[0.98] cursor-pointer text-center ${
+                                        isSelected
+                                          ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                          : "bg-slate-50 hover:bg-emerald-50/70 text-slate-700 border-slate-200 hover:border-emerald-300"
+                                      }`}
+                                    >
+                                      {t(opt.key)}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Accordion 4: Busy days / availability calendar */}
+          <div className="w-full max-w-full box-border bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <button
+              type="button"
+              id="accordion-toggle-calendar"
+              aria-expanded={expandedSections.calendar}
+              aria-controls="accordion-panel-calendar"
+              onClick={() => toggleAccordionSection("calendar")}
+              className="w-full flex items-center justify-between gap-3 p-3.5 sm:p-4 text-left hover:bg-slate-50/80 transition cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <CalendarDays className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-900">{t("busyDaysTitle")}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                      unavailableDates.length > 0
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-slate-100 text-slate-600 border-slate-200"
+                    }`}>
+                      {unavailableDates.length > 0 ? t("doneTag") : t("optionalTag")}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                    {unavailableDates.length === 0
+                      ? t("youAreFreeAllDays")
+                      : `${t("busyPrefixLabel")} ${unavailableDates.slice(0, 3).map(formatShortBusyDate).join(", ")}${unavailableDates.length > 3 ? ` +${unavailableDates.length - 3}` : ""}`}
+                  </p>
+                </div>
+              </div>
+              {expandedSections.calendar ? (
+                <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+              )}
+            </button>
+
+            <AnimatePresence initial={false}>
+              {expandedSections.calendar && (
+                <motion.div
+                  id="accordion-panel-calendar"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  className="overflow-hidden border-t border-slate-100"
+                >
+                  {(() => {
+                    const tomorrowDate = new Date();
+                    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+                    const tomorrowIso = formatDateToISO(tomorrowDate);
+                    const isTomorrowBusy = unavailableDates.includes(tomorrowIso);
+                    const weekendIsos = getUpcomingDays(7).filter((d) => d.isWeekend).map((d) => d.iso);
+                    const isWeekendBusy =
+                      weekendIsos.length > 0 && weekendIsos.every((iso) => unavailableDates.includes(iso));
+
+                    return (
+                      <div
+                        id="date-picker-availability-section"
+                        data-testid="date-picker-availability-section"
+                        className="space-y-4 bg-slate-50 p-4 sm:p-5"
+                      >
+                        <p className="text-xs font-medium text-slate-600">
+                          {t("customersWontCallBusyHint")}
+                        </p>
+
+                        {/* Part B1: Only 3 large buttons on top with clear ON/OFF states */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <button
+                            type="button"
+                            id="btn-mark-tomorrow-busy"
+                            aria-pressed={isTomorrowBusy}
+                            onClick={handleMarkTomorrow}
+                            className={`w-full py-3 px-3.5 rounded-xl border text-xs sm:text-sm font-bold transition cursor-pointer active:scale-[0.98] flex items-center justify-center gap-2 shadow-2xs ${
+                              isTomorrowBusy
+                                ? "bg-rose-600 border-rose-600 text-white shadow-xs"
+                                : "bg-white hover:bg-rose-50/60 border-slate-200 hover:border-rose-300 text-slate-800"
+                            }`}
+                          >
+                            {isTomorrowBusy ? (
+                              <Ban className="w-4 h-4 shrink-0" />
+                            ) : (
+                              <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+                            )}
+                            <span>{t("markTomorrowBusyBtn")}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            id="btn-mark-weekend-busy"
+                            aria-pressed={isWeekendBusy}
+                            onClick={handleMarkWeekend}
+                            className={`w-full py-3 px-3.5 rounded-xl border text-xs sm:text-sm font-bold transition cursor-pointer active:scale-[0.98] flex items-center justify-center gap-2 shadow-2xs ${
+                              isWeekendBusy
+                                ? "bg-rose-600 border-rose-600 text-white shadow-xs"
+                                : "bg-white hover:bg-rose-50/60 border-slate-200 hover:border-rose-300 text-slate-800"
+                            }`}
+                          >
+                            {isWeekendBusy ? (
+                              <Ban className="w-4 h-4 shrink-0" />
+                            ) : (
+                              <Calendar className="w-4 h-4 text-sky-500 shrink-0" />
+                            )}
+                            <span>{t("markWeekendBusyBtn")}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            id="btn-clear-all-dates"
+                            disabled={unavailableDates.length === 0}
+                            onClick={handleClearAllDates}
+                            className={`w-full py-3 px-3.5 rounded-xl border text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 shadow-2xs ${
+                              unavailableDates.length > 0
+                                ? "bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800 cursor-pointer active:scale-[0.98]"
+                                : "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
+                            }`}
+                          >
+                            <Trash2 className="w-4 h-4 shrink-0" />
+                            <span>{t("clearAllBusyDaysBtn")}</span>
+                          </button>
+                        </div>
+
+                        {/* Part B5: Summary line directly under buttons */}
+                        <div
+                          data-testid="busy-days-summary"
+                          className={`rounded-xl px-3.5 py-2.5 border text-xs font-semibold flex items-center gap-2 ${
+                            unavailableDates.length === 0
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                              : "bg-rose-50 border-rose-200 text-rose-800"
+                          }`}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              unavailableDates.length === 0 ? "bg-emerald-500" : "bg-rose-500"
+                            }`}
+                          />
+                          <span className="leading-snug">
+                            {unavailableDates.length === 0
+                              ? t("youAreFreeAllDays")
+                              : `${t("busyPrefixLabel")} ${unavailableDates.map(formatShortBusyDate).join(", ")}`}
+                          </span>
+                        </div>
+
+                        {/* Part B3: Collapsed "Choose days manually" link */}
+                        <div className="pt-1 border-t border-slate-200/70">
+                          <button
+                            type="button"
+                            id="btn-toggle-manual-days"
+                            aria-expanded={showManualDaysCalendar}
+                            onClick={() => setShowManualDaysCalendar((prev) => !prev)}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 py-1 cursor-pointer"
+                          >
+                            <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                            <span>{t("chooseDaysManually")}</span>
+                            {showManualDaysCalendar ? (
+                              <ChevronUp className="w-3.5 h-3.5 shrink-0" />
+                            ) : (
+                              <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                            )}
+                          </button>
+
+                          {showManualDaysCalendar && (
+                            <div className="mt-3 space-y-4">
+                              {/* 14-Day Interactive Toggle Grid */}
+                              <div>
+                                <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                                    <CalendarCheck className="w-3 h-3 text-emerald-600" />
+                                    <span>{t("upcoming14DaysTitle")}</span>
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-slate-500">
+                                    {t("freeGreenBusyRedLegend")}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                                  {getUpcomingDays(14).map((day) => {
+                                    const isMarkedUnavailable = unavailableDates.includes(day.iso);
+                                    return (
+                                      <button
+                                        key={day.iso}
+                                        type="button"
+                                        id={`toggle-date-${day.iso}`}
+                                        data-testid={`toggle-date-${day.iso}`}
+                                        onClick={() => handleToggleUnavailableDate(day.iso)}
+                                        className={`relative flex flex-col items-center justify-between p-2.5 rounded-xl border text-center transition-all cursor-pointer select-none active:scale-95 shadow-2xs ${
+                                          isMarkedUnavailable
+                                            ? "bg-rose-50 border-rose-300 text-rose-950 shadow-xs"
+                                            : "bg-emerald-50/60 border-emerald-300 hover:bg-emerald-50 text-emerald-950"
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between w-full mb-1">
+                                          <span className={`text-[9px] font-bold font-mono uppercase px-1 rounded ${
+                                            day.isToday
+                                              ? "bg-emerald-700 text-white"
+                                              : day.isTomorrow
+                                                ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                                : day.isWeekend
+                                                  ? "bg-slate-200/70 text-slate-600"
+                                                  : "text-slate-500"
+                                          }`}>
+                                            {day.isToday ? t("today") : day.isTomorrow ? t("tomorrow") : day.dayName}
+                                          </span>
+
+                                          {isMarkedUnavailable ? (
+                                            <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                          ) : (
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                          )}
+                                        </div>
+
+                                        <div className="my-0.5">
+                                          <span className={`text-base font-extrabold block leading-none ${
+                                            isMarkedUnavailable ? "text-rose-700 line-through decoration-rose-500/70" : "text-slate-900"
+                                          }`}>
+                                            {day.dayNumber}
+                                          </span>
+                                          <span className="text-[10px] font-semibold text-slate-500 uppercase font-mono">
+                                            {day.monthName}
+                                          </span>
+                                        </div>
+
+                                        <div className={`mt-1.5 w-full py-0.5 px-1 rounded-md text-[10px] font-bold flex items-center justify-center gap-1 ${
+                                          isMarkedUnavailable
+                                            ? "bg-rose-600 text-white"
+                                            : "bg-emerald-600 text-white"
+                                        }`}>
+                                          {isMarkedUnavailable ? (
+                                            <>
+                                              <Ban className="w-2.5 h-2.5 shrink-0" />
+                                              <span>{t("busyWord")}</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Check className="w-2.5 h-2.5 shrink-0" />
+                                              <span>{t("freeWord")}</span>
+                                            </>
+                                          )}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Custom Date Input for Any Future Date */}
+                              <div className="w-full max-w-full box-border pt-2 border-t border-slate-200/70 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                                <div className="w-full max-w-full box-border flex items-center gap-2 flex-wrap">
+                                  <label htmlFor="custom-date-picker" className="text-[11px] font-bold text-slate-600 flex items-center gap-1 font-mono">
+                                    <CalendarX className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                    <span>{t("addSpecificDate")}:</span>
+                                  </label>
+                                  <input
+                                    type="date"
+                                    id="custom-date-picker"
+                                    min={formatDateToISO(new Date())}
+                                    value={customDateInput}
+                                    onChange={(e) => setCustomDateInput(e.target.value)}
+                                    className="min-w-0 max-w-full bg-white border border-slate-200 hover:border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                                  />
+                                  <button
+                                    type="button"
+                                    id="btn-add-custom-date"
+                                    disabled={!customDateInput}
+                                    onClick={handleAddCustomDate}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white rounded-lg text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed shadow-2xs shrink-0"
+                                  >
+                                    {t("addDateButton")}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Accordion 5: Printable QR code */}
+          <div className="w-full max-w-full box-border bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <button
+              type="button"
+              id="accordion-toggle-qr"
+              aria-expanded={expandedSections.qr}
+              aria-controls="accordion-panel-qr"
+              onClick={() => toggleAccordionSection("qr")}
+              className="w-full flex items-center justify-between gap-3 p-3.5 sm:p-4 text-left hover:bg-slate-50/80 transition cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500"
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <QrCode className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-900">{t("printableQrTitle")}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                      qrDataUrl
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-slate-100 text-slate-600 border-slate-200"
+                    }`}>
+                      {qrDataUrl ? t("doneTag") : t("optionalTag")}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                    {t("printableQrHint")}
+                  </p>
+                </div>
+              </div>
+              {expandedSections.qr ? (
+                <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+              )}
+            </button>
+
+            <AnimatePresence initial={false}>
+              {expandedSections.qr && (
+                <motion.div
+                  id="accordion-panel-qr"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  className="overflow-hidden border-t border-slate-100"
+                >
+                  <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50/50 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                        <QrCode className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-sm font-bold text-emerald-950">{t("offlineMarketing")}</h4>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-1 max-w-lg leading-relaxed">
+                          {t("offlineMarketingDesc")}
+                        </p>
+                      </div>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => handleToggleUnavailableDate(iso)}
-                      className="text-rose-400 hover:text-rose-700 ml-0.5 cursor-pointer"
-                      title={`Unmark ${iso}`}
-                      aria-label={`Unmark ${iso}`}
+                      id="btn-open-marketing-qr"
+                      data-testid="open-marketing-qr-button"
+                      onClick={handleOpenQrModal}
+                      className="flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer shrink-0 w-full sm:w-auto"
                     >
-                      <Trash2 className="w-2.5 h-2.5" />
+                      <QrCode className="w-4 h-4" />
+                      <span>{t("printableQrCode")}</span>
                     </button>
-                  </span>
-                ))}
-                {unavailableDates.length > 5 && (
-                  <span className="text-[10px] font-bold text-slate-500 bg-slate-200/70 px-1.5 py-0.5 rounded-md">
-                    +{unavailableDates.length - 5} more
-                  </span>
-                )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Part 3: Single Sticky Bottom Save Bar (Always visible while scrolling) */}
+        <div className="sticky bottom-2 sm:bottom-3 z-30 w-full max-w-full box-border space-y-2">
+          {errorMsg && (
+            <div
+              role="alert"
+              className="w-full max-w-full box-border flex items-center justify-between gap-2 bg-rose-950/95 text-rose-100 text-xs font-semibold px-3.5 py-2.5 rounded-xl border border-rose-700/70 shadow-lg backdrop-blur-md"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="truncate sm:whitespace-normal">{errorMsg}</span>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Offline Marketing & Printable QR Code Banner */}
-        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50/50 p-4 sm:p-5 border border-emerald-200/90 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
-          <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
-              <QrCode className="w-5 h-5" />
+              <button
+                type="button"
+                onClick={() => setErrorMsg("")}
+                aria-label="Dismiss error"
+                className="text-rose-300 hover:text-white shrink-0 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold text-emerald-950">{t("offlineMarketing")}</h4>
-                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-850 uppercase border border-emerald-200">
-                  Flyer & Cards
+          )}
+
+          <div className="w-full max-w-full box-border overflow-hidden bg-emerald-950/95 backdrop-blur-md text-white rounded-2xl p-2.5 sm:p-3 px-3 sm:px-4 shadow-xl border border-emerald-800 flex items-center justify-between gap-2 sm:gap-3 animate-in slide-in-from-bottom-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isAvailable ? "bg-emerald-400" : "bg-slate-400"}`} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-xs font-bold text-white truncate">{name || t("workerProfile")}</span>
+                  {hasUnsavedChanges && !saving && !saveSuccess && (
+                    <span
+                      data-testid="unsaved-changes-label"
+                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-200 border border-amber-400/30 shrink-0 whitespace-nowrap"
+                    >
+                      {t("unsavedChangesLabel")}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] text-emerald-300 font-mono block truncate">
+                  ₹{dailyRate || "—"}/{t("dayShortWord")} • {skills.length} {t("skillsWord")}
                 </span>
               </div>
-              <p className="text-xs text-slate-600 mt-1 max-w-lg leading-relaxed">
-                {t("offlineMarketingDesc")}
-              </p>
             </div>
+            <button
+              type="submit"
+              id="btn-sticky-save-profile"
+              data-testid="sticky-save-profile-button"
+              disabled={saving}
+              className={`flex items-center gap-1.5 font-bold text-xs px-3 sm:px-4 py-2.5 rounded-xl transition cursor-pointer shrink-0 shadow-xs active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed ${
+                saveSuccess
+                  ? "bg-emerald-400 text-emerald-950"
+                  : "bg-emerald-500 hover:bg-emerald-400 text-emerald-950"
+              }`}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>{t("savingProfile")}</span>
+                </>
+              ) : saveSuccess ? (
+                <>
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>{t("profileSaved")}</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{t("saveProfile")}</span>
+                </>
+              )}
+            </button>
           </div>
-
-          <button
-            type="button"
-            id="btn-open-marketing-qr"
-            data-testid="open-marketing-qr-button"
-            onClick={handleOpenQrModal}
-            className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer shrink-0 whitespace-nowrap"
-          >
-            <QrCode className="w-4 h-4" />
-            <span>{t("printableQrCode")}</span>
-          </button>
-        </div>
-
-        {/* Form Action save */}
-        <div className="flex justify-end pt-4">
-          <button
-            type="submit"
-            id="btn-save-profile"
-            disabled={saving}
-            className={`flex items-center gap-2.5 font-bold text-xs px-6 py-3.5 rounded-xl shadow-md cursor-pointer transition-all duration-300 tracking-wider uppercase ${
-              saveSuccess
-                ? "bg-emerald-600 text-white ring-2 ring-emerald-400 ring-offset-2 ring-offset-white shadow-lg shadow-emerald-600/30 scale-[1.02]"
-                : "bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:bg-slate-300 disabled:scale-100 text-white"
-            }`}
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>{t("savingProfile")}</span>
-              </>
-            ) : saveSuccess ? (
-              <>
-                <span className="relative flex items-center justify-center">
-                  <span className="animate-ping absolute inline-flex h-3.5 w-3.5 rounded-full bg-emerald-200 opacity-75"></span>
-                  <Check 
-                    id="save-success-icon"
-                    data-testid="save-profile-success-check"
-                    className="w-4 h-4 text-white animate-in zoom-in-75 duration-200 stroke-[3]" 
-                  />
-                </span>
-                <span className="font-extrabold text-white animate-in fade-in duration-200">
-                  {t("profileSaved")}
-                </span>
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                <span>{t("saveProfile")}</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Sticky Bottom Save Bar (Always visible while scrolling) */}
-        <div className="sticky bottom-2 sm:bottom-3 z-30 bg-emerald-950/95 backdrop-blur-md text-white rounded-2xl p-2.5 sm:p-3 px-3 sm:px-4 shadow-xl border border-emerald-800 flex items-center justify-between gap-2 sm:gap-3 animate-in slide-in-from-bottom-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isAvailable ? 'bg-emerald-400' : 'bg-slate-400'}`} />
-            <div className="truncate">
-              <span className="text-xs font-bold text-white truncate block">{name || "Your Profile"}</span>
-              <span className="text-[10px] text-emerald-300 font-mono">₹{dailyRate}/day • {skills.length} skills</span>
-            </div>
-          </div>
-          <button
-            type="submit"
-            id="btn-sticky-save-profile"
-            disabled={saving}
-            className="flex items-center gap-1.5 font-bold text-xs px-4 py-2 bg-emerald-500 hover:bg-emerald-400 active:scale-95 disabled:opacity-50 text-emerald-950 rounded-xl transition cursor-pointer shrink-0 shadow-xs"
-          >
-            {saving ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : saveSuccess ? (
-              <Check className="w-3.5 h-3.5" />
-            ) : (
-              <Save className="w-3.5 h-3.5" />
-            )}
-            <span>{saving ? t("savingProfile") : saveSuccess ? t("profileSaved") : t("saveProfile")}</span>
-          </button>
         </div>
       </form>
 
@@ -2106,11 +3066,25 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
 
               {/* Worker Profile Summary */}
               <div className="flex items-center justify-center gap-3">
-                <img 
-                  src={photo || PRESET_AVATARS[0].url} 
-                  alt={name || "Worker"} 
-                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover border-2 border-emerald-200 shadow-2xs shrink-0" 
-                />
+                {photo && !avatarBroken ? (
+                  <img 
+                    src={photo} 
+                    alt="" 
+                    onError={() => setAvatarBroken(true)}
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover border-2 border-emerald-200 shadow-2xs shrink-0" 
+                  />
+                ) : !photo && !brokenPresets[PRESET_AVATARS[0].url] ? (
+                  <img 
+                    src={PRESET_AVATARS[0].url} 
+                    alt="" 
+                    onError={() => setBrokenPresets((prev) => ({ ...prev, [PRESET_AVATARS[0].url]: true }))}
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover border-2 border-emerald-200 shadow-2xs shrink-0" 
+                  />
+                ) : (
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-100 border-2 border-emerald-200 flex items-center justify-center shrink-0">
+                    <User className="w-7 h-7 text-slate-400" />
+                  </div>
+                )}
                 <div className="text-left min-w-0">
                   <h4 className="text-lg sm:text-xl font-extrabold text-slate-900 leading-tight truncate">
                     {name || "Skilled Professional"}
@@ -2170,7 +3144,7 @@ export default function ProfileEditor({ uid, onSaveSuccess }: ProfileEditorProps
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-mono font-bold text-slate-500 block">Daily Wage:</span>
-                  <span className="font-extrabold text-emerald-800">₹{dailyRate}/day</span>
+                  <span className="font-extrabold text-emerald-800">₹{dailyRate || "—"}/day</span>
                 </div>
               </div>
 

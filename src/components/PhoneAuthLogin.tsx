@@ -77,17 +77,35 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
+  const isDevMode =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("dev") === "true";
+
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+
+  const clearRecaptchaVerifier = () => {
+    const existing = recaptchaVerifierRef.current || (window as any).recaptchaVerifier;
+    if (existing) {
+      try {
+        existing.clear();
+      } catch {
+        // Ignore
+      }
+    }
+    recaptchaVerifierRef.current = null;
+    (window as any).recaptchaVerifier = undefined;
+    if (typeof document !== "undefined") {
+      const container = document.getElementById("recaptcha-container");
+      if (container) {
+        container.innerHTML = "";
+      }
+    }
+  };
+
   // Clean reCAPTCHA on unmount
   useEffect(() => {
     return () => {
-      if ((window as any).recaptchaVerifier) {
-        try {
-          (window as any).recaptchaVerifier.clear();
-        } catch {
-          // Ignore
-        }
-        (window as any).recaptchaVerifier = undefined;
-      }
+      clearRecaptchaVerifier();
     };
   }, []);
 
@@ -100,9 +118,13 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
-  // Setup reCAPTCHA verifier for phone auth
+  // Setup reCAPTCHA verifier for phone auth (created once, cleared on error, recreated on next attempt)
   const getOrCreateRecaptchaVerifier = (): RecaptchaVerifier => {
+    if (recaptchaVerifierRef.current) {
+      return recaptchaVerifierRef.current;
+    }
     if ((window as any).recaptchaVerifier) {
+      recaptchaVerifierRef.current = (window as any).recaptchaVerifier;
       return (window as any).recaptchaVerifier;
     }
 
@@ -112,20 +134,16 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
         // reCAPTCHA solved
       },
       "expired-callback": () => {
-        setErrorMessage(
-          language === "kn"
-            ? "reCAPTCHA ಪರಿಶೀಲನೆಯ ಸಮಯ ಮುಗಿದಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೊಮ್ಮೆ ಪ್ರಯತ್ನಿಸಿ."
-            : "reCAPTCHA verification expired. Please try again."
-        );
         try {
           verifier.clear();
         } catch {
           // Ignore
         }
-        (window as any).recaptchaVerifier = undefined;
+        clearRecaptchaVerifier();
       },
     });
 
+    recaptchaVerifierRef.current = verifier;
     (window as any).recaptchaVerifier = verifier;
     return verifier;
   };
@@ -148,19 +166,16 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
 
     const cleanDigits = phoneNumber.trim();
     if (cleanDigits.length !== 10) {
-      setErrorMessage(
-        language === "kn"
-          ? "ದಯವಿಟ್ಟು ಮಾನ್ಯವಾದ 10 ಅಂಕಿಗಳ ಮೊಬೈಲ್ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ."
-          : "Please enter a valid 10-digit Indian mobile number."
-      );
+      setErrorMessage(t("phoneAuthErrInvalidNumber"));
       return;
     }
 
     setIsSendingOtp(true);
     const fullPhoneNumber = `+91${cleanDigits}`;
 
+    let verifier: RecaptchaVerifier | null = null;
     try {
-      const verifier = getOrCreateRecaptchaVerifier();
+      verifier = getOrCreateRecaptchaVerifier();
       const result = await signInWithPhoneNumber(auth, fullPhoneNumber, verifier);
       setConfirmationResult(result);
       setStep("otp");
@@ -173,40 +188,33 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
       setTimeout(() => {
         otpInputsRef.current[0]?.focus();
       }, 150);
-    } catch (err: any) {
-      console.error("Firebase Phone Auth error:", err);
-      const errStr = `${err?.code || ""} ${err?.message || ""} ${String(err)}`.toLowerCase();
-      let message = "Failed to send OTP. Please try again.";
+    } catch (error: any) {
+      console.error("Phone auth error:", error?.code, error?.message);
 
-      if (errStr.includes("unauthorized-domain")) {
-        const hostname = typeof window !== "undefined" ? window.location.hostname : "your domain";
-        message = language === "kn"
-          ? `ಅನಧಿಕೃತ ಡೊಮೈನ್ (${hostname}). ದಯವಿಟ್ಟು Firebase Console > Authentication > Settings > Authorized domains ನಲ್ಲಿ "${hostname}" ಸೇರಿಸಿ.`
-          : `Domain "${hostname}" is not authorized in Firebase Console. Add "${hostname}" in Firebase Console > Authentication > Settings > Authorized domains, or tap Instant Demo Mode below.`;
-      } else if (err.code === "auth/invalid-phone-number") {
-        message = "Invalid phone number format. Please check the 10-digit number.";
-      } else if (err.code === "auth/too-many-requests") {
-        message = "Too many OTP requests. Please wait a few minutes before trying again.";
-      } else if (err.code === "auth/quota-exceeded") {
-        message = "SMS quota exceeded for today. You can test instantly using the Demo Access below.";
-      } else if (err.code === "auth/captcha-check-failed") {
-        message = "reCAPTCHA verification failed. Please try again.";
-      } else if (err.code === "auth/network-request-failed") {
-        message = "Network error. Please verify your internet connection.";
-      } else if (err.code === "auth/operation-not-allowed") {
-        message = "Phone Authentication is being enabled. You can test with the Demo Login below!";
+      let message = t("phoneAuthErrUnavailable");
+      if (error?.code === "auth/invalid-phone-number") {
+        message = t("phoneAuthErrInvalidNumber");
+      } else if (error?.code === "auth/too-many-requests") {
+        message = t("phoneAuthErrTooManyRequests");
+      } else if (error?.code === "auth/network-request-failed") {
+        message = t("phoneAuthErrNetworkFailed");
+      } else if (
+        error?.code === "auth/operation-not-allowed" ||
+        error?.code === "auth/unauthorized-domain"
+      ) {
+        message = t("phoneAuthErrUnavailable");
       }
 
       setErrorMessage(message);
 
-      if ((window as any).recaptchaVerifier) {
+      if (verifier) {
         try {
-          (window as any).recaptchaVerifier.clear();
+          verifier.clear();
         } catch {
           // Ignore
         }
-        (window as any).recaptchaVerifier = undefined;
       }
+      clearRecaptchaVerifier();
     } finally {
       setIsSendingOtp(false);
     }
@@ -277,16 +285,20 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
       const userCredential = await confirmationResult.confirm(fullCode);
       const user = userCredential.user;
       onLoginSuccess(user);
-    } catch (err: any) {
-      console.error("OTP Verification Error:", err);
+    } catch (error: any) {
+      console.error("Phone auth error:", error?.code, error?.message);
       let message = "Invalid OTP code. Please check and try again.";
 
-      if (err.code === "auth/invalid-verification-code") {
+      if (error?.code === "auth/invalid-verification-code") {
         message = "Incorrect 6-digit OTP code entered. Please check your SMS.";
-      } else if (err.code === "auth/code-expired") {
+      } else if (error?.code === "auth/code-expired") {
         message = "This OTP has expired. Please tap 'Resend OTP' to get a new code.";
-      } else if (err.code === "auth/too-many-requests") {
-        message = "Too many attempts. Please wait a few minutes before trying again.";
+      } else if (error?.code === "auth/too-many-requests") {
+        message = t("phoneAuthErrTooManyRequests");
+      } else if (error?.code === "auth/network-request-failed") {
+        message = t("phoneAuthErrNetworkFailed");
+      } else if (error?.code === "auth/invalid-phone-number") {
+        message = t("phoneAuthErrInvalidNumber");
       }
 
       setErrorMessage(message);
@@ -750,7 +762,7 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
                     <span className="leading-relaxed">{errorMessage}</span>
                   </div>
-                  {errorMessage.toLowerCase().includes("domain") && (
+                  {isDevMode && errorMessage.toLowerCase().includes("domain") && (
                     <div className="pt-2 border-t border-rose-200/80 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[11px] text-rose-600 font-semibold">Bypass & test immediately:</span>
                       <button
@@ -1149,55 +1161,60 @@ export default function PhoneAuthLogin({ onLoginSuccess, onContinueAsGuest }: Ph
             </div>
           )}
 
-          {/* Divider */}
-          <div className="relative pt-2">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200" />
-            </div>
-            <div className="relative flex justify-center text-[10px] uppercase font-mono font-bold tracking-widest text-slate-400">
-              <span className="bg-white px-2.5">Instant Testing & Guest Access</span>
-            </div>
-          </div>
+          {/* Dev-only Demo Login & Guest Access */}
+          {(isDevMode || onContinueAsGuest) && (
+            <div className="space-y-2 pt-2">
+              {isDevMode && (
+                <>
+                  <div className="relative pb-1">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200" />
+                    </div>
+                    <div className="relative flex justify-center text-[10px] uppercase font-mono font-bold tracking-widest text-slate-400">
+                      <span className="bg-white px-2.5">Instant Testing & Guest Access</span>
+                    </div>
+                  </div>
 
-          {/* Guest and Demo shortcuts */}
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                id="btn-demo-customer"
-                onClick={() => handleDemoAccess("customer")}
-                className="py-2.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                title="Instant login as Customer looking to hire"
-              >
-                <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Test as Customer</span>
-              </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      id="btn-demo-customer"
+                      onClick={() => handleDemoAccess("customer")}
+                      className="py-2.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="Instant login as Customer looking to hire"
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Test as Customer</span>
+                    </button>
 
-              <button
-                type="button"
-                id="btn-demo-worker"
-                onClick={() => handleDemoAccess("worker")}
-                className="py-2.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                title="Instant login as Skilled Artisan"
-              >
-                <Building className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Test as Artisan</span>
-              </button>
+                    <button
+                      type="button"
+                      id="btn-demo-worker"
+                      onClick={() => handleDemoAccess("worker")}
+                      className="py-2.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="Instant login as Skilled Artisan"
+                    >
+                      <Building className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Test as Artisan</span>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {onContinueAsGuest && (
+                <button
+                  type="button"
+                  id="btn-guest-browse"
+                  onClick={onContinueAsGuest}
+                  className="w-full text-center text-xs text-slate-500 hover:text-slate-800 font-medium py-1.5 transition cursor-pointer"
+                >
+                  {language === "kn"
+                    ? "ಲಾಗಿನ್ ಇಲ್ಲದೆ ಸದ್ಯಕ್ಕೆ ಪರಿಶೀಲಿಸಿ →"
+                    : "Skip for now & browse directory as guest →"}
+                </button>
+              )}
             </div>
-
-            {onContinueAsGuest && (
-              <button
-                type="button"
-                id="btn-guest-browse"
-                onClick={onContinueAsGuest}
-                className="w-full text-center text-xs text-slate-500 hover:text-slate-800 font-medium py-1.5 transition cursor-pointer"
-              >
-                {language === "kn"
-                  ? "ಲಾಗಿನ್ ಇಲ್ಲದೆ ಸದ್ಯಕ್ಕೆ ಪರಿಶೀಲಿಸಿ →"
-                  : "Skip for now & browse directory as guest →"}
-              </button>
-            )}
-          </div>
+          )}
 
         </div>
 

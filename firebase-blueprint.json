@@ -69,6 +69,14 @@
           "type": "string",
           "description": "Short bio or statement of pride/experience."
         },
+        "isSample": {
+          "type": "boolean",
+          "description": "True if this worker profile is a seeded sample/demo profile."
+        },
+        "verified": {
+          "type": "boolean",
+          "description": "True if the worker's phone number has been verified via Firebase Phone Auth."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",

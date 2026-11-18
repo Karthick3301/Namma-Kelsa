@@ -94,6 +94,9 @@ interface WorkerCardProps {
   distance: number;
   isFavorite?: boolean;
   onToggleFavorite?: (workerUid: string) => void;
+  onRatingUpdate?: (workerUid: string, avgRating: number, reviewCount: number) => void;
+  currentUserUid?: string | null;
+  onEditMyProfile?: () => void;
 }
 
 interface ReviewToastData {
@@ -152,16 +155,44 @@ export default function WorkerCard({
   customerTownName,
   distance,
   isFavorite = false,
-  onToggleFavorite
+  onToggleFavorite,
+  onRatingUpdate,
+  currentUserUid,
+  onEditMyProfile
 }: WorkerCardProps) {
   const { t, language } = useLanguage();
   const [reviews, setReviews] = useState<WorkerReview[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [showReviewsList, setShowReviewsList] = useState(false);
-  const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [expandedById, setExpandedById] = useState<Record<string, boolean>>({});
+  const showMoreDetails = Boolean(expandedById[worker.uid]);
+  const setShowMoreDetails = (value: boolean | ((prev: boolean) => boolean)) => {
+    setExpandedById((prev) => ({
+      ...prev,
+      [worker.uid]: typeof value === "function" ? value(Boolean(prev[worker.uid])) : value,
+    }));
+  };
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(auth.currentUser);
   const [showMiniMap, setShowMiniMap] = useState(false);
+  const [showVerifiedTooltip, setShowVerifiedTooltip] = useState(false);
+
+  const isOwnCard = Boolean(
+    (currentUserUid && worker.uid === currentUserUid) ||
+    (currentUser?.uid && worker.uid === currentUser.uid)
+  );
+
+  const isVerifiedWorker = Boolean(
+    worker.verified === true ||
+    worker.isVerified === true ||
+    worker.phoneVerified === true
+  );
+
+  useEffect(() => {
+    if (!showVerifiedTooltip) return;
+    const timer = setTimeout(() => setShowVerifiedTooltip(false), 2600);
+    return () => clearTimeout(timer);
+  }, [showVerifiedTooltip]);
 
   // Review form states
   const [rating, setRating] = useState(5);
@@ -357,25 +388,25 @@ export default function WorkerCard({
   // Inquiry preset options
   const inquiryPresets = [
     {
+      id: "work_today",
+      label: t("askAboutWorkToday"),
+      text: language === "kn"
+        ? `ನನಗೆ ಇಂದು ${worker.skills[0] || "ಕೆಲಸ"}ಕ್ಕೆ ನಿಮ್ಮ ನೆರವು ಬೇಕಾಗಿದೆ. ನೀವು ಇಂದು ಕೆಲಸಕ್ಕೆ ಬರಲು ಸಾಧ್ಯವೇ?`
+        : `Hi ${worker.name}, are you available for ${worker.skills[0] || "work"} today in ${customerTownName || worker.locationName || "our area"}?`
+    },
+    {
+      id: "rate",
+      label: t("askAboutRate"),
+      text: language === "kn"
+        ? `ನನ್ನಲ್ಲಿ ${worker.skills[0] || "ಕೆಲಸ"} ಇದೆ. ನಿಮ್ಮ ದೈನಂದಿನ ಕೂಲಿ ದರ ಮತ್ತು ಅಂದಾಜು ವೆಚ್ಚ ತಿಳಿಸುತ್ತೀರಾ?`
+        : `Hi ${worker.name}, I would like to ask about your daily rate and estimate for ${worker.skills[0] || "work"}.`
+    },
+    {
       id: "availability",
-      label: language === "kn" ? "ಲಭ್ಯತೆ ವಿಚಾರಣೆ" : "Availability Inquiry",
+      label: t("askAboutAvailability"),
       text: language === "kn"
         ? `ನನಗೆ ${worker.skills[0] || "ಕೆಲಸ"}ಕ್ಕೆ ನಿಮ್ಮ ನೆರವು ಬೇಕಾಗಿದೆ. ಮುಂಬರುವ ದಿನಗಳಲ್ಲಿ ನೀವು ಲಭ್ಯವಿದ್ದೀರಾ?`
         : `I would like to inquire about your availability for ${worker.skills[0] || "trade"} work in ${customerTownName || worker.locationName || "your area"}.`
-    },
-    {
-      id: "quote",
-      label: language === "kn" ? "ದರ & ಅಂದಾಜು" : "Cost & Quote Estimation",
-      text: language === "kn"
-        ? `ನನ್ನಲ್ಲಿ ಒಂದು ಕೆಲಸವಿದೆ. ಅಂದಾಜು ಖರ್ಚು ಮತ್ತು ದಿನಗಳ ವಿವರ ನೀಡಲು ಸಾಧ್ಯವೇ?`
-        : `I have a specific job requirement and would like to get an estimated quote and timeline.`
-    },
-    {
-      id: "urgent",
-      label: language === "kn" ? "ತುರ್ತು ಕೆಲಸ ಇಂದು" : "Immediate Work Today",
-      text: language === "kn"
-        ? `ನನಗೆ ಇಂದು ತುರ್ತಾಗಿ ${worker.skills[0] || "ಕೆಲಸಗಾರರು"} ಬೇಕಾಗಿದ್ದಾರೆ. ನೀವು ಇಂದು ಬರಲು ಸಾಧ್ಯವೇ?`
-        : `I have an urgent requirement today. Are you available for immediate dispatch?`
     }
   ];
 
@@ -533,6 +564,14 @@ export default function WorkerCard({
     );
     return () => unsubscribe();
   }, [worker.uid]);
+
+  // Notify parent when reviews change so "Best rated" sorting stays live
+  useEffect(() => {
+    if (!onRatingUpdate) return;
+    const count = reviews.length;
+    const avg = count > 0 ? reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / count : 0;
+    onRatingUpdate(worker.uid, avg, count);
+  }, [reviews, worker.uid, onRatingUpdate]);
 
   // Format review timestamp into human-readable relative or calendar format
   const formatReviewDate = (createdAt: any): string => {
@@ -727,7 +766,7 @@ export default function WorkerCard({
   return (
     <div 
       id={`worker-card-${worker.uid}`}
-      className="relative flex flex-col justify-between bg-white rounded-2xl border border-slate-200 hover:border-slate-300 shadow-xs transition-all duration-300 hover:shadow-md overflow-hidden"
+      className="relative flex flex-col h-auto self-start w-full max-w-full box-border bg-white rounded-2xl border border-slate-200 hover:border-slate-300 shadow-xs transition-all duration-300 hover:shadow-md overflow-hidden"
     >
       {/* Availability Pulsing Banner at the top */}
       <div className={`flex items-center justify-between gap-2 px-3 sm:px-4 py-2 text-xs font-bold tracking-wide border-b ${
@@ -758,10 +797,20 @@ export default function WorkerCard({
                 : t("notAvailableToday")}
           </span>
         </div>
+
+        {isOwnCard && (
+          <span
+            id={`this-is-you-badge-${worker.uid}`}
+            data-testid="this-is-you-badge"
+            className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-700 text-white text-[10px] font-extrabold tracking-wide shrink-0 shadow-2xs"
+          >
+            {t("thisIsYouBadge")}
+          </span>
+        )}
       </div>
 
       {/* Compact Essential Profile Header Content (Always Visible) */}
-      <div className="p-4 sm:p-5 flex-1 space-y-3">
+      <div className="p-4 sm:p-5 space-y-3">
         <div className="flex gap-3 sm:gap-4">
           <div className="relative shrink-0">
             <img 
@@ -772,15 +821,44 @@ export default function WorkerCard({
             />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="font-bold text-slate-900 text-base truncate flex items-center gap-1.5">
-              <span className="truncate">{worker.name}</span>
-              {isAvailableToday ? (
-                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" title="Available Today" />
-              ) : isMarkedBusyToday ? (
+            <h3 className="font-bold text-slate-900 text-base flex items-center flex-wrap gap-1.5">
+              <span className="truncate max-w-full">{worker.name}</span>
+
+              {/* Green Verified Tick: ONLY shown when worker has a real verified flag */}
+              {isVerifiedWorker && (
+                <span className="relative inline-flex items-center shrink-0">
+                  <button
+                    type="button"
+                    id={`verified-tick-${worker.uid}`}
+                    data-testid={`verified-tick-${worker.uid}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowVerifiedTooltip((prev) => !prev);
+                    }}
+                    title={t("phoneNumberVerified")}
+                    aria-label={t("phoneNumberVerified")}
+                    className="inline-flex items-center justify-center rounded-full p-0.5 text-emerald-600 hover:text-emerald-700 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer"
+                  >
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  </button>
+
+                  {showVerifiedTooltip && (
+                    <span
+                      role="tooltip"
+                      data-testid={`verified-tooltip-${worker.uid}`}
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-40 px-2 py-1 rounded-md bg-slate-900 text-white text-[10px] font-bold whitespace-nowrap shadow-lg"
+                    >
+                      {t("phoneNumberVerified")}
+                    </span>
+                  )}
+                </span>
+              )}
+
+              {isMarkedBusyToday && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200 shrink-0">
                   {language === "kn" ? "ಇಂದು ರಜೆ" : "Busy Today"}
                 </span>
-              ) : null}
+              )}
             </h3>
             
             <p className="text-slate-500 text-xs font-medium flex items-center flex-wrap gap-x-1 gap-y-0.5 mt-1">
@@ -816,13 +894,25 @@ export default function WorkerCard({
                   }}
                   title={t("tooltipViewReviews")}
                   aria-label={t("tooltipViewReviews")}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold border border-amber-200/70 shadow-2xs transition-all cursor-pointer active:scale-95"
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold border shadow-2xs transition-all cursor-pointer active:scale-95 ${
+                    hasReviews
+                      ? "bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200/70"
+                      : "bg-sky-50 hover:bg-sky-100 text-sky-800 border-sky-200/80"
+                  }`}
                 >
-                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                  <span className="font-extrabold">{averageRating}</span>
-                  <span className="text-amber-700/80 font-normal text-[11px]">
-                    ({reviews.length} {reviews.length === 1 ? (language === "kn" ? "ವಿಮರ್ಶೆ" : "review") : (language === "kn" ? "ವಿಮರ್ಶೆಗಳು" : "reviews")})
-                  </span>
+                  {hasReviews ? (
+                    <>
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0" />
+                      <span className="font-extrabold">{averageRating}</span>
+                      <span className="text-amber-700/85 font-semibold text-[11px]">
+                        ({reviews.length})
+                      </span>
+                    </>
+                  ) : (
+                    <span data-testid={`worker-new-badge-${worker.uid}`} className="font-bold">
+                      {t("newWorkerBadge")}
+                    </span>
+                  )}
                 </button>
               </ActionTooltip>
             </div>
@@ -1497,9 +1587,15 @@ export default function WorkerCard({
                   {language === "kn" ? "ಗ್ರಾಹಕರ ವಿಮರ್ಶೆಗಳು" : "Customer Reviews"}
                 </h4>
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-                  <span className="font-extrabold text-amber-900">{averageRating}</span>
-                  <span className="text-slate-300">•</span>
-                  <span>{reviews.length} {reviews.length === 1 ? (language === "kn" ? "ವಿಮರ್ಶೆ" : "review") : (language === "kn" ? "ವಿಮರ್ಶೆಗಳು" : "reviews")}</span>
+                  {hasReviews ? (
+                    <>
+                      <span className="font-extrabold text-amber-900">{averageRating}</span>
+                      <span className="text-slate-300">•</span>
+                      <span>({reviews.length})</span>
+                    </>
+                  ) : (
+                    <span className="font-bold text-sky-800">{t("newWorkerBadge")}</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1901,57 +1997,48 @@ export default function WorkerCard({
         )}
       </AnimatePresence>
 
-      {/* Always-Visible Primary Action Buttons: WhatsApp & Direct Call */}
-      <div className="border-t border-slate-100 px-4 py-3 bg-slate-50/70 flex flex-wrap items-center gap-2">
-        {/* Direct Message via WhatsApp Button with Pre-filled Template */}
-        <div className="flex items-center flex-1 min-w-[165px]">
-          <ActionTooltip label={t("tooltipWhatsapp")} position="top" className="flex-1 min-w-0">
-            <a 
-              id={`whatsapp-direct-button-${worker.uid}`}
-              data-testid="whatsapp-direct-message-button"
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={t("tooltipWhatsapp")}
-              aria-label={t("tooltipWhatsapp")}
-              className="w-full flex items-center justify-center gap-1.5 bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-white py-2 px-2.5 sm:px-3 rounded-l-xl text-[11px] sm:text-xs font-black shadow-sm shadow-emerald-950/10 tracking-wide hover:shadow-md transition-all duration-200 uppercase group"
-            >
-              <MessageCircle className="w-3.5 h-3.5 fill-white text-white shrink-0 transition-transform group-hover:scale-110" />
-              <span className="truncate">{t("directMessageViaWhatsapp")}</span>
-            </a>
-          </ActionTooltip>
-          <ActionTooltip label={t("tooltipWhatsappCustomize")} position="top">
-            <button
-              type="button"
-              id={`whatsapp-customize-btn-${worker.uid}`}
-              data-testid="whatsapp-customize-button"
-              onClick={() => setShowWhatsAppModal(true)}
-              title={t("tooltipWhatsappCustomize")}
-              aria-label={t("tooltipWhatsappCustomize")}
-              className="bg-[#20ba59] hover:bg-[#1caa4f] active:scale-95 text-white py-2 px-2 rounded-r-xl border-l border-emerald-600/40 shadow-sm shadow-emerald-950/10 transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0"
-            >
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-          </ActionTooltip>
+      {/* Always-Visible Primary Action Buttons: Edit My Profile (if own card) OR Equal-Width WhatsApp & Call */}
+      {isOwnCard ? (
+        <div className="border-t border-slate-100 px-4 py-3 bg-slate-50/70">
+          <button
+            type="button"
+            id={`edit-my-profile-button-${worker.uid}`}
+            data-testid="edit-my-profile-button"
+            onClick={() => onEditMyProfile?.()}
+            className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white py-2.5 px-4 rounded-xl text-sm font-bold shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer"
+          >
+            <Wrench className="w-4 h-4 shrink-0" />
+            <span>{t("editMyProfileBtn")}</span>
+          </button>
         </div>
+      ) : (
+        <div className="border-t border-slate-100 px-4 py-3 bg-slate-50/70 grid grid-cols-2 gap-2.5">
+          {/* WhatsApp Button (opens message options bottom sheet) */}
+          <button
+            type="button"
+            id={`whatsapp-direct-button-${worker.uid}`}
+            data-testid="whatsapp-direct-message-button"
+            onClick={() => setShowWhatsAppModal(true)}
+            title={t("whatsappBtn")}
+            aria-label={t("whatsappBtn")}
+            className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-white py-2.5 px-3 rounded-xl text-sm font-bold shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer"
+          >
+            <MessageCircle className="w-4 h-4 fill-white text-white shrink-0" />
+            <span>{t("whatsappBtn")}</span>
+          </button>
 
-        {/* Direct Call Button: on mobile triggers native tel: link; on desktop opens contact modal with copy number */}
-        <ActionTooltip 
-          label={isMobile ? t("tooltipDirectCall") : (language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone & Call Worker")} 
-          position="top"
-          className="flex-1 sm:flex-initial min-w-[130px]"
-        >
+          {/* Call Button: on mobile triggers native tel: link; on desktop opens contact modal */}
           {isMobile ? (
-            <a 
+            <a
               id={`direct-call-button-${worker.uid}`}
               data-testid="direct-call-button"
               href={`tel:${worker.phone.trim()}`}
-              title={t("tooltipDirectCall")}
-              aria-label={t("tooltipDirectCall")}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2 px-3.5 rounded-xl text-xs font-black shadow-sm shadow-emerald-700/20 tracking-wider hover:shadow-md transition-all duration-200 uppercase group"
+              title={t("callBtn")}
+              aria-label={t("callBtn")}
+              className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2.5 px-3 rounded-xl text-sm font-bold shadow-xs hover:shadow-md transition-all duration-200"
             >
-              <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
-              <span>{t("directCall")}</span>
+              <Phone className="w-4 h-4 shrink-0" />
+              <span>{t("callBtn")}</span>
             </a>
           ) : (
             <button
@@ -1962,16 +2049,16 @@ export default function WorkerCard({
                 setShowDesktopCallModal(true);
                 setIsPhoneCopied(false);
               }}
-              title={language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone Number & Call"}
-              aria-label={language === "kn" ? "ಕರೆ ಮಾಡಲು ವಿವರಗಳನ್ನು ವೀಕ್ಷಿಸಿ" : "View Phone Number & Call"}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2 px-3.5 rounded-xl text-xs font-black shadow-sm shadow-emerald-700/20 tracking-wider hover:shadow-md transition-all duration-200 uppercase group cursor-pointer"
+              title={t("callBtn")}
+              aria-label={t("callBtn")}
+              className="w-full min-h-[44px] flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white py-2.5 px-3 rounded-xl text-sm font-bold shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer"
             >
-              <Phone className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
-              <span>{t("directCall")}</span>
+              <Phone className="w-4 h-4 shrink-0" />
+              <span>{t("callBtn")}</span>
             </button>
           )}
-        </ActionTooltip>
-      </div>
+        </div>
+      )}
 
       {/* Accessible Collapsible Section Toggle Button at Bottom of Card */}
       <button
@@ -1985,108 +2072,95 @@ export default function WorkerCard({
       >
         {showMoreDetails ? (
           <>
-            <span>Less details</span>
+            <span>{t("lessDetailsBtn")}</span>
             <ChevronUp className="w-4 h-4 shrink-0" />
           </>
         ) : (
           <>
-            <span>More details</span>
+            <span>{t("moreDetailsBtn")}</span>
             <ChevronDown className="w-4 h-4 shrink-0" />
           </>
         )}
       </button>
 
-      {/* Direct Message via WhatsApp Inquiry Modal */}
+      {/* WhatsApp Message Options Bottom Sheet (Mobile) / Modal (Desktop) */}
       {showWhatsAppModal && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs"
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs"
           onClick={() => setShowWhatsAppModal(false)}
         >
-          <div 
-            className="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl border border-slate-200 p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`whatsapp-sheet-title-${worker.uid}`}
+            className="relative w-full max-w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl border border-slate-200 p-4 sm:p-5 space-y-3.5 max-h-[90vh] overflow-y-auto overflow-x-hidden box-border"
             onClick={(e) => e.stopPropagation()}
             data-testid={`whatsapp-modal-${worker.uid}`}
           >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#25D366] text-white flex items-center justify-center shadow-xs">
+            {/* Mobile Drag Handle */}
+            <div className="w-10 h-1.5 bg-slate-200 rounded-full mx-auto sm:hidden" />
+
+            {/* Sheet Header */}
+            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-[#25D366] text-white flex items-center justify-center shadow-xs shrink-0">
                   <MessageCircle className="w-5 h-5 fill-white" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
-                    {t("directMessageViaWhatsapp")}
+                <div className="min-w-0">
+                  <h3
+                    id={`whatsapp-sheet-title-${worker.uid}`}
+                    className="text-sm font-bold text-slate-900 truncate"
+                  >
+                    {t("whatsappBtn")} · {worker.name}
                   </h3>
-                  <p className="text-[11px] text-slate-500">
-                    {language === "kn" 
-                      ? `${worker.name} ರವರಿಗೆ ಮುಂಚಿತ ಸಿದ್ಧಪಡಿಸಿದ ಸಂದೇಶ ಕಳುಹಿಸಿ`
-                      : `Send a pre-filled inquiry directly to ${worker.name}`}
+                  <p className="text-[11px] text-slate-500 truncate">
+                    ₹{worker.dailyRate} {t("perDay")} · {worker.locationName}
                   </p>
                 </div>
               </div>
-              <button 
+              <button
+                type="button"
                 onClick={() => setShowWhatsAppModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer shrink-0"
                 aria-label="Close WhatsApp dialog"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Worker Summary Card */}
-            <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-              <img 
-                src={worker.photo || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"} 
-                alt={worker.name} 
-                className="w-12 h-12 rounded-lg object-cover ring-1 ring-slate-200 shrink-0"
-              />
-              <div className="min-w-0 flex-1 text-xs">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-slate-900 truncate">{worker.name}</h4>
-                  <span className="font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded text-[10px]">
-                    ₹{worker.dailyRate} {t("perDay")}
-                  </span>
-                </div>
-                <p className="text-slate-500 text-[11px] mt-0.5 flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-emerald-650" />
-                  <span>{worker.locationName} Hub</span>
-                  <span className="text-slate-300">•</span>
-                  <span>{worker.skills[0] || "Artisan"}</span>
-                </p>
+            {/* Quick Message Options */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">
+                {t("chooseMessageOrWrite")}
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {inquiryPresets.map((preset) => {
+                  const isSelected = selectedInquiryPreset === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      data-testid={`whatsapp-preset-${preset.id}`}
+                      onClick={() => {
+                        setSelectedInquiryPreset(preset.id);
+                        setCustomerInquiry(preset.text);
+                      }}
+                      className={`w-full min-h-[44px] flex items-center justify-between gap-2 text-left text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-emerald-50 border-emerald-500 text-emerald-900 shadow-2xs"
+                          : "bg-slate-50/70 border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span>{preset.label}</span>
+                      {isSelected && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Quick Inquiry Presets */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
-                {language === "kn" ? "ತ್ವರಿತ ವಿಚಾರಣೆ ಆಯ್ಕೆಗಳು:" : "Quick Inquiry Presets:"}
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {inquiryPresets.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedInquiryPreset(preset.id);
-                      setCustomerInquiry(preset.text);
-                    }}
-                    className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
-                      selectedInquiryPreset === preset.id
-                        ? "bg-emerald-50 border-emerald-400 text-emerald-800 shadow-2xs font-bold"
-                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Custom Inquiry Textarea */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
-                {t("yourInquiry")}
-              </label>
+            {/* Optional Custom Note */}
+            <div className="space-y-1">
               <textarea
                 rows={2}
                 value={customerInquiry}
@@ -2094,36 +2168,20 @@ export default function WorkerCard({
                   setCustomerInquiry(e.target.value);
                   setSelectedInquiryPreset("custom");
                 }}
-                placeholder={language === "kn" ? "ನಿಮ್ಮ ವಿಚಾರಣೆಯನ್ನು ಬರೆಯಿರಿ..." : "Describe what work you need done, preferred timing, or questions..."}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                placeholder={t("yourInquiry")}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden box-border"
               />
             </div>
 
-            {/* Live Pre-filled WhatsApp Message Template Preview */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
-                <span className="flex items-center gap-1 text-emerald-800">
-                  <Sparkles className="w-3 h-3 text-emerald-600" />
-                  {t("whatsappTemplatePreview")}
-                </span>
-                <span className="text-slate-400 lowercase">wa.me template</span>
-              </div>
-              <div className="bg-[#EFEAE2] p-3 rounded-xl border border-slate-200/90 relative">
-                <div className="bg-[#DCF8C6] p-3 rounded-lg text-xs text-slate-800 shadow-2xs border border-emerald-200/50 whitespace-pre-line leading-relaxed font-sans">
-                  {whatsappMessage}
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            {/* Sheet Actions */}
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={handleCopyWhatsAppMessage}
-                className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                className="min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer shrink-0"
               >
                 {isCopiedWhatsApp ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{isCopiedWhatsApp ? (language === "kn" ? "ಕಾಪಿ ಆಗಿದೆ!" : "Copied!") : (language === "kn" ? "ಕಾಪಿ ಮಾಡಿ" : "Copy Template")}</span>
+                <span>{isCopiedWhatsApp ? (language === "kn" ? "ಕಾಪಿ ಆಗಿದೆ!" : "Copied!") : (language === "kn" ? "ಕಾಪಿ" : "Copy")}</span>
               </button>
 
               <a
@@ -2133,9 +2191,9 @@ export default function WorkerCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleSendInquiry}
-                className="flex items-center gap-2 bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-white py-2.5 px-4 rounded-xl text-xs font-black shadow-md tracking-wider uppercase transition-all duration-200"
+                className="flex-1 min-h-[44px] flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-white py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all duration-200"
               >
-                <MessageCircle className="w-4 h-4 fill-white" />
+                <MessageCircle className="w-4 h-4 fill-white shrink-0" />
                 <span>{t("sendOnWhatsapp")}</span>
               </a>
             </div>
@@ -2598,7 +2656,7 @@ export default function WorkerCard({
                     <span className="text-emerald-700 font-mono text-xs">{t("skillRadarTitle")}</span>
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Self-Assessed Craftsmanship & Trade Competencies
+                    {t("skillRadarSubtitle")}
                   </p>
                 </div>
               </div>

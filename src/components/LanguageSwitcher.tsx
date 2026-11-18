@@ -69,19 +69,6 @@ export default function LanguageSwitcher({ className = "", compact = false }: La
           </span>
           <ChevronDown className={`w-3.5 h-3.5 text-emerald-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
         </button>
-
-        {/* Quick Cycle Button (Single-tap rotation between 5 languages) */}
-        <button
-          type="button"
-          id="btn-quick-cycle-lang"
-          data-testid="quick-cycle-lang-button"
-          onClick={toggleLanguage}
-          title="Quick cycle to next language"
-          className="px-2 py-1.5 text-[11px] font-bold text-emerald-300 hover:text-white hover:bg-emerald-850 rounded-lg transition-colors cursor-pointer border-l border-emerald-800/80"
-          aria-label="Cycle language"
-        >
-          ↻
-        </button>
       </div>
 
       {/* Mobile Backdrop (prevents mis-taps and anchors bottom picker) */}

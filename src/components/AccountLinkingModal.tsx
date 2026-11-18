@@ -90,6 +90,24 @@ export default function AccountLinkingModal({
   if (!isOpen) return null;
 
   // Setup reCAPTCHA verifier for linking
+  const clearLinkRecaptchaVerifier = () => {
+    const existing = (window as any).linkRecaptchaVerifier;
+    if (existing) {
+      try {
+        existing.clear();
+      } catch {
+        // Ignore
+      }
+    }
+    (window as any).linkRecaptchaVerifier = undefined;
+    if (typeof document !== "undefined") {
+      const container = document.getElementById("link-recaptcha-container");
+      if (container) {
+        container.innerHTML = "";
+      }
+    }
+  };
+
   const getOrCreateRecaptchaVerifier = (): RecaptchaVerifier => {
     if ((window as any).linkRecaptchaVerifier) {
       return (window as any).linkRecaptchaVerifier;
@@ -99,7 +117,12 @@ export default function AccountLinkingModal({
       size: "invisible",
       callback: () => {},
       "expired-callback": () => {
-        setError("reCAPTCHA expired. Please try again.");
+        try {
+          verifier.clear();
+        } catch {
+          // Ignore
+        }
+        clearLinkRecaptchaVerifier();
       },
     });
 
@@ -115,13 +138,14 @@ export default function AccountLinkingModal({
 
     const clean = phoneNumber.trim().replace(/\D/g, "");
     if (clean.length !== 10) {
-      setError("Please enter a valid 10-digit Indian mobile number.");
+      setError(t("phoneAuthErrInvalidNumber"));
       return;
     }
 
     setLoading(true);
+    let verifier: RecaptchaVerifier | null = null;
     try {
-      const verifier = getOrCreateRecaptchaVerifier();
+      verifier = getOrCreateRecaptchaVerifier();
       const fullPhone = `+91${clean}`;
       const result = await linkWithPhoneNumber(user, fullPhone, verifier);
       setConfirmationResult(result);
@@ -129,17 +153,27 @@ export default function AccountLinkingModal({
       setResendCooldown(30);
       setSuccess(`OTP sent to +91 ${clean}. Please enter the 6-digit code below.`);
       setTimeout(() => otpInputsRef.current[0]?.focus(), 150);
-    } catch (err: any) {
-      console.error("Link phone error:", err);
-      if (err.code === "auth/credential-already-in-use") {
+    } catch (error: any) {
+      console.error("Phone auth error:", error?.code, error?.message);
+      if (error?.code === "auth/credential-already-in-use") {
         setError("This phone number is already linked to another account.");
-      } else if (err.code === "auth/invalid-phone-number") {
-        setError("Invalid phone number format.");
-      } else if (err.code === "auth/too-many-requests") {
-        setError("Too many attempts. Please wait a few minutes.");
+      } else if (error?.code === "auth/invalid-phone-number") {
+        setError(t("phoneAuthErrInvalidNumber"));
+      } else if (error?.code === "auth/too-many-requests") {
+        setError(t("phoneAuthErrTooManyRequests"));
+      } else if (error?.code === "auth/network-request-failed") {
+        setError(t("phoneAuthErrNetworkFailed"));
       } else {
-        setError(err.message || "Failed to send OTP for account linking.");
+        setError(t("phoneAuthErrUnavailable"));
       }
+      if (verifier) {
+        try {
+          verifier.clear();
+        } catch {
+          // Ignore
+        }
+      }
+      clearLinkRecaptchaVerifier();
     } finally {
       setLoading(false);
     }

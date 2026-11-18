@@ -19,6 +19,10 @@ export interface WorkerProfile {
   gallery?: string[]; // Backwards-compatibility with legacy gallery photos
   experience: number; // Years
   about: string;
+  verified?: boolean; // Set when phone number was confirmed through Firebase Phone Auth
+  isVerified?: boolean;
+  phoneVerified?: boolean;
+  isSample?: boolean;
   createdAt: any; // Firestore Timestamp
   updatedAt: any; // Firestore Timestamp
 }

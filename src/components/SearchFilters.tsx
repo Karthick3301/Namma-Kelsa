@@ -304,10 +304,10 @@ export default function SearchFilters({
   // Browser Geolocation API for Customer Live Device Location
   const handleUseCurrentLocation = () => {
     setLocationFeedback(null);
-    if (!navigator.geolocation) {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
       setLocationFeedback({
         type: "error",
-        message: "Geolocation is not supported by your browser. Please enter your address or coordinates manually below, or select a city hub."
+        message: t("couldNotGetLocation")
       });
       return;
     }
@@ -322,9 +322,9 @@ export default function SearchFilters({
         setManualLatInput(lat.toString());
         setManualLngInput(lng.toString());
 
-        let resolvedTitle = `Live GPS (${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E)`;
+        let resolvedTitle = `${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E`;
 
-        // Try reverse geocoding via OpenStreetMap Nominatim with strict timeout
+        // Reverse-geocode to a readable area name via OpenStreetMap Nominatim
         try {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), 4000);
@@ -341,29 +341,21 @@ export default function SearchFilters({
             resolvedTitle = formatReverseGeocodedLocation(data.address, data.display_name);
           }
         } catch {
-          // Keep default title if network fails
+          // Keep coordinate fallback if reverse geocoding network call fails
         }
 
         setCustomerLocation?.({ name: resolvedTitle, latitude: lat, longitude: lng });
         setCustomAddressInput(resolvedTitle);
         setIsLocatingGps(false);
         setShowLocationModal(false);
-        setLocationFeedback({
-          type: "success",
-          message: `Live GPS detected: ${resolvedTitle} (${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E). Searching for workers near your position!`
-        });
+        setLocationFeedback(null);
       },
-      (error) => {
+      () => {
         setIsLocatingGps(false);
-        let message = "Unable to retrieve your current GPS location. Please select a city hub or type your address in the custom address box below.";
-        if (error.code === error.PERMISSION_DENIED) {
-          message = "Location permission was denied. Please enter your address or coordinates manually below, or select a city hub.";
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          message = "GPS satellite or network position unavailable. Please enter your address manually below or select a city hub.";
-        } else if (error.code === error.TIMEOUT) {
-          message = "GPS location request timed out. Please try again or type your street address below.";
-        }
-        setLocationFeedback({ type: "error", message });
+        setLocationFeedback({
+          type: "error",
+          message: t("couldNotGetLocation")
+        });
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
@@ -491,105 +483,416 @@ export default function SearchFilters({
     });
   };
 
+  const [showFiltersSheet, setShowFiltersSheet] = useState<boolean>(false);
+
+  // Close Filters sheet on Escape key
+  useEffect(() => {
+    if (!showFiltersSheet) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowFiltersSheet(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showFiltersSheet]);
+
+  const activeFiltersCount =
+    (searchText.trim().length > 0 ? 1 : 0) +
+    (maxDistance !== 30 ? 1 : 0) +
+    (showFavoritesOnly ? 1 : 0) +
+    (selectedSkill !== null ? 1 : 0) +
+    (onlyAvailable ? 1 : 0);
+
+  const handleResetAllFilters = () => {
+    setSearchText("");
+    setMaxDistance(30);
+    setShowFavoritesOnly?.(false);
+    setSelectedSkill(null);
+    setOnlyAvailable(false);
+  };
+
   return (
-    <div id="search-filters-container" className="bg-white rounded-2xl border border-slate-200 p-3.5 sm:p-5 space-y-3.5 sm:space-y-4 shadow-sm">
-      {/* Top Search Bar */}
-      <div className="relative flex items-center">
-        <Search className="absolute left-3.5 w-4 h-4 text-slate-400" />
-        <input
-          id="filter-search-input"
-          type="text"
-          placeholder={t("searchPlaceholder")}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          onKeyDown={handleSearchKeyDown}
-          className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl pl-10 pr-10 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-950"
-        />
-        {searchText && (
-          <button 
-            onClick={() => setSearchText("")} 
-            className="absolute right-3 text-slate-400 hover:text-slate-600 cursor-pointer"
-            title="Clear search"
-            aria-label="Clear search"
+    <div
+      id="search-filters-container"
+      className="w-full max-w-full box-border bg-white rounded-2xl border border-slate-200 p-2.5 sm:p-3.5 space-y-2.5 shadow-2xs"
+    >
+      {/* Row 1: Compact Location Line ("📍 Madiwala, Bengaluru · Change"), Large "📍 Use my current location" button + "Filters" Button */}
+      <div className="flex flex-col gap-2 w-full max-w-full box-border">
+        <div className="flex items-center justify-between gap-2 w-full max-w-full box-border">
+          <div
+            id="compact-location-bar"
+            data-testid="compact-location-bar"
+            onClick={() => setShowLocationModal(true)}
+            className="min-w-0 flex-1 inline-flex items-center gap-1.5 text-xs sm:text-sm text-slate-800 hover:text-emerald-800 py-1 px-1.5 -ml-1.5 rounded-lg hover:bg-slate-50 transition cursor-pointer group"
           >
-            <X className="w-4 h-4" />
+            <span aria-hidden="true" className="shrink-0 text-sm leading-none">📍</span>
+            <span className="font-bold text-slate-900 truncate">
+              {currentLocationName}
+            </span>
+            <span className="text-slate-300 shrink-0">·</span>
+            <button
+              type="button"
+              id="btn-open-location-picker"
+              data-testid="change-location-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowLocationModal(true);
+              }}
+              className="text-xs font-bold text-emerald-700 group-hover:text-emerald-800 underline underline-offset-2 shrink-0 cursor-pointer"
+            >
+              {t("changeButton")}
+            </button>
+
+            {/* Hidden select to preserve data-testid="customer-location-select" for automated test suites */}
+            <select
+              id="filter-simulated-location"
+              data-testid="customer-location-select"
+              aria-hidden="true"
+              tabIndex={-1}
+              value={selectedTownIdx !== null ? selectedTownIdx : "custom"}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val !== "custom") handleSelectPresetHub(Number(val));
+              }}
+              className="sr-only"
+            >
+              {selectedTownIdx === null && (
+                <option value="custom">
+                  {currentLocationName}
+                </option>
+              )}
+              {TOWN_CENTERS.map((town, idx) => (
+                <option key={idx} value={idx}>
+                  {town.state ? `${town.state} — ${town.name.split(",")[0]}` : town.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filters Button with Active Badge */}
+          <button
+            type="button"
+            id="btn-open-filters-sheet"
+            data-testid="open-filters-sheet-button"
+            onClick={() => setShowFiltersSheet(true)}
+            className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer active:scale-95 ${
+              activeFiltersCount > 0
+                ? "bg-emerald-50 text-emerald-900 border-emerald-300 shadow-2xs"
+                : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+            <span>{t("filtersBtn")}</span>
+            {activeFiltersCount > 0 && (
+              <span
+                data-testid="active-filters-badge"
+                className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-600 text-white text-[10px] font-mono font-extrabold leading-none"
+              >
+                {activeFiltersCount}
+              </span>
+            )}
           </button>
+        </div>
+
+        {/* Large "📍 Use my current location" button in the location bar */}
+        <button
+          type="button"
+          id="btn-bar-use-current-location"
+          data-testid="bar-use-current-location-button"
+          onClick={handleUseCurrentLocation}
+          disabled={isLocatingGps}
+          className="w-full min-h-[42px] flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-[0.99] text-emerald-900 border border-emerald-200 text-xs sm:text-sm font-bold transition cursor-pointer disabled:opacity-60"
+        >
+          {isLocatingGps ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin text-emerald-700 shrink-0" />
+              <span>{t("detectingLocation")}</span>
+            </>
+          ) : (
+            <span>{t("useMyCurrentLocation")}</span>
+          )}
+        </button>
+
+        {/* Friendly inline message if GPS fails or is denied from the location bar */}
+        {locationFeedback && locationFeedback.type === "error" && !showLocationModal && (
+          <div
+            data-testid="location-error-banner"
+            className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-2"
+          >
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="font-medium leading-snug">{t("couldNotGetLocation")}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowLocationModal(true)}
+              className="shrink-0 text-xs font-bold text-emerald-800 underline underline-offset-2 cursor-pointer"
+            >
+              {t("changeButton")}
+            </button>
+          </div>
         )}
       </div>
 
-      {/* 1. Compact Location Bar (Zomato / Swiggy / Urban Company style) */}
-      <div 
-        id="compact-location-bar"
-        data-testid="compact-location-bar"
-        onClick={() => setShowLocationModal(true)}
-        className="bg-emerald-50/70 hover:bg-emerald-50 border border-emerald-200/90 hover:border-emerald-300 rounded-xl p-2.5 sm:p-3 flex items-center justify-between gap-2.5 sm:gap-3 transition cursor-pointer group shadow-2xs"
-      >
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-            <MapPin className="w-4 h-4 fill-white text-white" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-mono uppercase font-bold text-emerald-800 tracking-wider">
-                {t("locationHubLabel") || "Your Location"}
-              </span>
-              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-sm uppercase tracking-wider shrink-0 ${
-                locationSource === "live"
-                  ? "bg-blue-100 text-blue-800 border border-blue-200"
-                  : locationSource === "custom"
-                  ? "bg-purple-100 text-purple-800 border border-purple-200"
-                  : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-              }`}>
-                {locationSource === "live" ? "Live GPS" : locationSource === "custom" ? "Custom" : "City Hub"}
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm font-extrabold text-slate-900 truncate mt-0.5">
-              {currentLocationName}
-            </p>
-          </div>
-        </div>
-
+      {/* Row 2: "Available today" toggle + Single Horizontally-Scrollable Row of Skill Chips */}
+      <div className="flex items-center gap-1.5 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Available Today Toggle */}
         <button
+          id="filter-switch-availability"
+          data-testid="filter-available-today-toggle"
           type="button"
-          id="btn-open-location-picker"
-          data-testid="change-location-button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowLocationModal(true);
-          }}
-          className="flex items-center gap-1 sm:gap-1.5 text-xs font-bold text-emerald-700 bg-white group-hover:bg-emerald-700 group-hover:text-white border border-emerald-300 group-hover:border-emerald-700 px-2.5 sm:px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0 cursor-pointer"
+          role="switch"
+          aria-checked={onlyAvailable}
+          onClick={() => setOnlyAvailable(!onlyAvailable)}
+          className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-bold border transition cursor-pointer whitespace-nowrap ${
+            onlyAvailable
+              ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+              : "bg-emerald-50/70 text-emerald-900 border-emerald-200 hover:bg-emerald-100/70"
+          }`}
         >
-          <span>Change</span>
-          <ChevronRight className="w-3.5 h-3.5" />
+          <span
+            className={`w-2 h-2 rounded-full shrink-0 ${
+              onlyAvailable ? "bg-white" : "bg-emerald-500"
+            }`}
+          />
+          <span>{t("availableTodayFilter")}</span>
         </button>
 
-        {/* Hidden select to preserve data-testid="customer-location-select" for automated test suites */}
-        <select
-          id="filter-simulated-location"
-          data-testid="customer-location-select"
-          aria-hidden="true"
-          tabIndex={-1}
-          value={selectedTownIdx !== null ? selectedTownIdx : "custom"}
-          onChange={(e) => {
-            const val = e.target.value;
-            if (val !== "custom") handleSelectPresetHub(Number(val));
-          }}
-          className="sr-only"
+        <span className="h-4 w-px bg-slate-200 shrink-0 mx-0.5" aria-hidden="true" />
+
+        {/* All Skills Chip */}
+        <button
+          type="button"
+          id="skill-chip-all"
+          onClick={() => setSelectedSkill(null)}
+          className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition cursor-pointer whitespace-nowrap ${
+            selectedSkill === null
+              ? "bg-emerald-100 text-emerald-800 border-emerald-300 shadow-2xs"
+              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+          }`}
         >
-          {selectedTownIdx === null && (
-            <option value="custom">
-              {currentLocationName}
-            </option>
-          )}
-          {TOWN_CENTERS.map((town, idx) => (
-            <option key={idx} value={idx}>
-              {town.state ? `${town.state} — ${town.name.split(',')[0]}` : town.name}
-            </option>
-          ))}
-        </select>
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <span>{t("skillAll")}</span>
+        </button>
+
+        {/* Individual Skill Chips (Painting, Plumbing, Electrical, Gardening, Tiling, Carpentry, Masonry, Cleaning) */}
+        {SKILL_OPTIONS.map((skill) => {
+          const isSelected = selectedSkill === skill.label;
+          const labelText = getTranslatedSkillLabel(skill.id, skill.label);
+          return (
+            <button
+              key={skill.id}
+              type="button"
+              id={`filter-skill-badge-${skill.id}`}
+              onClick={() => setSelectedSkill(isSelected ? null : skill.label)}
+              className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition cursor-pointer whitespace-nowrap ${
+                isSelected
+                  ? "bg-emerald-100 text-emerald-800 border-emerald-300 shadow-2xs"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {getSkillIcon(skill.icon, "w-3.5 h-3.5 shrink-0")}
+              <span>{labelText}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* 2. Full Location Picker Modal / Mobile Sheet */}
+      {/* Filters Bottom Sheet (Mobile) / Modal (Desktop) */}
+      {showFiltersSheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setShowFiltersSheet(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("filtersBtn")}
+            data-testid="filters-bottom-sheet"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-full sm:max-w-lg max-h-[90vh] sm:max-h-[85vh] box-border bg-white rounded-t-3xl sm:rounded-2xl overflow-x-hidden overflow-y-auto shadow-2xl border border-slate-200 flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200"
+          >
+            {/* Mobile Grab Handle */}
+            <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-slate-300" aria-hidden="true" />
+            </div>
+
+            {/* Sheet Header */}
+            <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3.5 border-b border-slate-100 shrink-0 box-border">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+                  <SlidersHorizontal className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-extrabold text-slate-900 truncate">
+                  {t("filtersBtn")}
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                id="btn-close-filters-sheet"
+                onClick={() => setShowFiltersSheet(false)}
+                aria-label={t("closeBtn")}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Sheet Body */}
+            <div className="p-4 sm:p-5 space-y-5 flex-1 overflow-y-auto overflow-x-hidden box-border">
+              {/* 1. Search Box (Skill or Name) */}
+              <div className="space-y-1.5 w-full max-w-full box-border">
+                <label
+                  htmlFor="filter-search-input"
+                  className="text-xs font-bold text-slate-700 block"
+                >
+                  {t("searchPlaceholder")}
+                </label>
+                <div className="relative flex items-center w-full max-w-full box-border">
+                  <Search className="absolute left-3.5 w-4 h-4 text-slate-400 shrink-0" />
+                  <input
+                    id="filter-search-input"
+                    type="text"
+                    placeholder={t("searchPlaceholder")}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    className="w-full min-w-0 box-border bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl pl-10 pr-9 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-950"
+                  />
+                  {searchText && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchText("")}
+                      className="absolute right-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      title={t("closeBtn")}
+                      aria-label={t("closeBtn")}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. Distance Radius Slider with Quick Buttons */}
+              <div className="space-y-2.5 w-full max-w-full box-border">
+                <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <Compass className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="truncate">{t("distanceRadiusLabel")}</span>
+                  </span>
+                  <span className="text-emerald-700 font-extrabold font-mono shrink-0">
+                    {maxDistance >= 500
+                      ? t("allIndiaDistance")
+                      : `${maxDistance} ${t("km")}`}
+                  </span>
+                </div>
+
+                <input
+                  id="filter-distance-range"
+                  type="range"
+                  min={1}
+                  max={100}
+                  step={1}
+                  value={maxDistance >= 500 ? 100 : maxDistance}
+                  onChange={(e) => setMaxDistance(Number(e.target.value))}
+                  className="w-full accent-emerald-600 bg-slate-100 rounded-lg appearance-none h-2 cursor-pointer"
+                />
+
+                {/* Quick Radius Buttons: 5 km, 15 km, 30 km, 50 km, 100 km, All India */}
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 w-full max-w-full box-border pt-0.5">
+                  {[
+                    { label: `5 ${t("km")}`, value: 5 },
+                    { label: `15 ${t("km")}`, value: 15 },
+                    { label: `30 ${t("km")}`, value: 30 },
+                    { label: `50 ${t("km")}`, value: 50 },
+                    { label: `100 ${t("km")}`, value: 100 },
+                    { label: t("allIndiaDistance"), value: 500 }
+                  ].map((preset) => {
+                    const isSelected =
+                      (preset.value === 500 && maxDistance >= 500) ||
+                      maxDistance === preset.value;
+                    return (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => setMaxDistance(preset.value)}
+                        className={`min-w-0 w-full py-2 px-2 rounded-xl text-xs font-bold border transition cursor-pointer text-center truncate ${
+                          isSelected
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3. My Favorites Toggle */}
+              <div className="pt-1 border-t border-slate-100 w-full max-w-full box-border">
+                <button
+                  id="filter-switch-favorites"
+                  data-testid="filter-my-favorites-button"
+                  type="button"
+                  onClick={() => setShowFavoritesOnly && setShowFavoritesOnly(!showFavoritesOnly)}
+                  className={`w-full min-h-[44px] box-border flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer border ${
+                    showFavoritesOnly
+                      ? "bg-rose-600 text-white border-rose-600 shadow-xs"
+                      : "bg-slate-50 text-slate-800 border-slate-200 hover:border-rose-200 hover:text-rose-700"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <Heart
+                      className={`w-4 h-4 shrink-0 ${
+                        showFavoritesOnly ? "fill-white text-white" : "text-rose-500 fill-rose-50"
+                      }`}
+                    />
+                    <span className="truncate">{t("myFavorites")}</span>
+                  </span>
+                  {typeof favoritesCount === "number" && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-mono font-extrabold shrink-0 ${
+                        showFavoritesOnly
+                          ? "bg-rose-800 text-white"
+                          : "bg-rose-100 text-rose-800"
+                      }`}
+                    >
+                      {favoritesCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Sheet Footer: Reset & Apply Buttons */}
+            <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3.5 border-t border-slate-100 bg-slate-50/60 shrink-0 box-border">
+              <button
+                type="button"
+                id="btn-reset-filters-sheet"
+                data-testid="reset-filters-sheet-button"
+                onClick={handleResetAllFilters}
+                className="flex-1 min-w-0 min-h-[44px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-bold transition cursor-pointer"
+              >
+                {t("resetFiltersShort")}
+              </button>
+              <button
+                type="button"
+                id="btn-apply-filters-sheet"
+                data-testid="apply-filters-sheet-button"
+                onClick={() => setShowFiltersSheet(false)}
+                className="flex-1 min-w-0 min-h-[44px] px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-xs sm:text-sm font-bold shadow-xs transition cursor-pointer"
+              >
+                {t("applyFiltersBtn")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Location Picker Modal / Mobile Sheet */}
       {showLocationModal && (
         <div 
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs transition-opacity"
@@ -682,37 +985,23 @@ export default function SearchFilters({
                 </div>
               </div>
 
-              {/* Order Item 2: Use My Current Location button (directly below search bar) */}
+              {/* Order Item 2: Large "📍 Use my current location" button in area-change screen */}
               <button
                 type="button"
                 id="btn-customer-use-current-location"
                 data-testid="customer-use-current-location-button"
                 onClick={handleUseCurrentLocation}
                 disabled={isLocatingGps}
-                className="w-full flex items-center justify-between p-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 active:scale-[0.99] transition cursor-pointer text-left group"
+                className="w-full min-h-[48px] flex items-center justify-center gap-2.5 p-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-xs active:scale-[0.99] transition cursor-pointer disabled:opacity-60"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-                    {isLocatingGps ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    ) : (
-                      <Crosshair className="w-4 h-4 text-white" />
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-emerald-950 block">
-                      {isLocatingGps ? "Detecting GPS Position..." : "Use My Current Location"}
-                    </span>
-                    <span className="text-[11px] text-emerald-800">
-                      Auto-detect using device GPS & reverse geocode
-                    </span>
-                  </div>
-                </div>
-
-                <span className="text-xs font-bold text-emerald-700 font-mono flex items-center gap-1">
-                  GPS
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </span>
+                {isLocatingGps ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white shrink-0" />
+                    <span>{t("detectingLocation")}</span>
+                  </>
+                ) : (
+                  <span>{t("useMyCurrentLocation")}</span>
+                )}
               </button>
 
               {/* Feedback Alert if any */}
@@ -941,262 +1230,6 @@ export default function SearchFilters({
           </div>
         </div>
       )}
-
-      {/* Local Storage-based Recent Skill Searches */}
-      {recentSearches.length > 0 && (
-        <div 
-          id="recent-skill-searches-panel"
-          data-testid="recent-skill-searches"
-          className="bg-emerald-50/50 border border-emerald-200/70 rounded-xl p-3 space-y-2 transition-all"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-slate-600 font-mono">
-              <History className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                {t("recentSkillSearches")}
-              </span>
-              <span className="text-[10px] font-bold font-mono text-emerald-800 bg-white/90 border border-emerald-200/80 px-1.5 py-0.2 rounded-full shadow-2xs">
-                {recentSearches.length}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              id="btn-clear-recent-searches"
-              onClick={handleClearAllRecent}
-              className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 flex items-center gap-1 transition cursor-pointer px-2 py-0.5 rounded-md hover:bg-rose-50/80 border border-transparent hover:border-rose-200"
-              title={t("clearHistory")}
-              aria-label={t("clearHistory")}
-            >
-              <Trash2 className="w-3 h-3" />
-              <span>{t("clearHistory")}</span>
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            {recentSearches.map((skillName) => {
-              const matchingSkill = SKILL_OPTIONS.find(
-                (s) => s.label.toLowerCase() === skillName.toLowerCase() || s.id.toLowerCase() === skillName.toLowerCase()
-              );
-              const canonicalName = matchingSkill ? matchingSkill.label : skillName;
-              const isSelected = selectedSkill === canonicalName;
-              const displayName = matchingSkill 
-                ? getTranslatedSkillLabel(matchingSkill.id, matchingSkill.label) 
-                : skillName;
-
-              return (
-                <div
-                  key={skillName}
-                  className={`inline-flex items-center rounded-lg border text-xs transition-all shadow-2xs ${
-                    isSelected 
-                      ? "border-emerald-600 bg-emerald-600 text-white shadow-xs" 
-                      : "border-slate-200 bg-white hover:border-emerald-300 text-slate-700"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    id={`recent-skill-chip-${canonicalName.toLowerCase().replace(/\s+/g, "-")}`}
-                    onClick={() => handleSelectRecent(canonicalName)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-l-lg font-bold transition cursor-pointer ${
-                      isSelected 
-                        ? "text-white" 
-                        : "text-slate-700 hover:text-emerald-700"
-                    }`}
-                    title={`Filter by ${displayName}`}
-                  >
-                    {matchingSkill ? (
-                      getSkillIcon(matchingSkill.icon, `w-3 h-3 ${isSelected ? "text-white" : "text-emerald-600"}`)
-                    ) : (
-                      <Clock className="w-3 h-3 text-slate-400" />
-                    )}
-                    <span>{displayName}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveRecent(skillName);
-                    }}
-                    className={`px-1.5 py-1 rounded-r-lg border-l transition cursor-pointer ${
-                      isSelected
-                        ? "border-emerald-500 text-emerald-100 hover:bg-emerald-700 hover:text-white"
-                        : "border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                    }`}
-                    title={`Remove ${displayName} from search history`}
-                    aria-label={`Remove ${displayName} from search history`}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Skills Chip selection group */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
-            {t("skillsExpertise")}
-          </label>
-          {selectedSkill && (
-            <button 
-              onClick={() => setSelectedSkill(null)}
-              className="text-xs text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 cursor-pointer"
-            >
-              {t("resetFilters")}
-            </button>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            id="skill-chip-all"
-            onClick={() => setSelectedSkill(null)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border-2 cursor-pointer transition ${
-              selectedSkill === null 
-                ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-xs" 
-                : "bg-white text-slate-650 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{t("skillAll")}</span>
-          </button>
-
-          {SKILL_OPTIONS.map((skill) => {
-            const isSelected = selectedSkill === skill.label;
-            const labelText = getTranslatedSkillLabel(skill.id, skill.label);
-            return (
-              <button
-                key={skill.id}
-                id={`filter-skill-badge-${skill.id}`}
-                onClick={() => setSelectedSkill(isSelected ? null : skill.label)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border-2 cursor-pointer transition ${
-                  isSelected 
-                    ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-xs" 
-                    : "bg-white text-slate-650 border-slate-200 hover:bg-slate-100/60"
-                }`}
-              >
-                {getSkillIcon(skill.icon, "w-3.5 h-3.5")}
-                <span>{labelText}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Distance slider & quick radius presets & Only Available toggle */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-t border-slate-100 pt-3.5">
-        
-        {/* Distance Filter Panel */}
-        <div className="flex-1 max-w-xl space-y-2">
-          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
-            <span className="flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5 text-emerald-650" />
-              <span>{t("distanceRadiusLabel")}</span>
-            </span>
-            <span className="text-emerald-700 font-black font-mono lowercase">
-              {maxDistance >= 500
-                ? "All-India (Any Distance)"
-                : language === "kn" 
-                  ? `${maxDistance} ${t("km")} ${t("withinRadius")}` 
-                  : `${t("withinRadius")} ${maxDistance}${t("km")}`}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <input
-              id="filter-distance-range"
-              type="range"
-              min={1}
-              max={100}
-              step={1}
-              value={maxDistance >= 500 ? 100 : maxDistance}
-              onChange={(e) => setMaxDistance(Number(e.target.value))}
-              className="w-full accent-emerald-600 bg-slate-100 rounded-lg appearance-none h-2 cursor-pointer"
-            />
-          </div>
-
-          {/* Quick Radius Selector Pills */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] font-mono text-slate-400 uppercase font-bold">Quick:</span>
-            {[
-              { label: "5 km (Nearby)", value: 5 },
-              { label: "15 km", value: 15 },
-              { label: "30 km", value: 30 },
-              { label: "50 km", value: 50 },
-              { label: "100 km", value: 100 },
-              { label: "All India", value: 500 }
-            ].map((preset) => {
-              const isSelected = (preset.value === 500 && maxDistance >= 500) || (maxDistance === preset.value);
-              return (
-                <button
-                  key={preset.label}
-                  type="button"
-                  onClick={() => setMaxDistance(preset.value)}
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
-                    isSelected
-                      ? "bg-emerald-700 text-white border-emerald-700 shadow-2xs font-mono"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Real-time Availability & My Favorites filter toggles */}
-        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap w-full lg:w-auto">
-          <button
-            id="filter-switch-availability"
-            type="button"
-            onClick={() => setOnlyAvailable(!onlyAvailable)}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border whitespace-nowrap ${
-              onlyAvailable 
-                ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" 
-                : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
-            }`}
-          >
-            {onlyAvailable ? (
-              <Check className="w-4 h-4 shrink-0" />
-            ) : (
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
-            )}
-            <span>{t("onlyAvailableToday")}</span>
-          </button>
-
-          {/* My Favorites Filter Toggle Button */}
-          <button
-            id="filter-switch-favorites"
-            data-testid="filter-my-favorites-button"
-            type="button"
-            onClick={() => setShowFavoritesOnly && setShowFavoritesOnly(!showFavoritesOnly)}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border whitespace-nowrap ${
-              showFavoritesOnly
-                ? "bg-rose-600 text-white border-rose-600 shadow-xs ring-2 ring-rose-200"
-                : "bg-white text-slate-700 border-slate-200 hover:border-rose-200 hover:text-rose-700"
-            }`}
-            title="Filter to show only your saved favorite workers"
-          >
-            <Heart className={`w-4 h-4 shrink-0 ${showFavoritesOnly ? "fill-white text-white" : "text-rose-500 fill-rose-50"}`} />
-            <span>{t("myFavorites")}</span>
-            {typeof favoritesCount === "number" && (
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-black ${
-                showFavoritesOnly 
-                  ? "bg-rose-800 text-white" 
-                  : "bg-rose-100 text-rose-800"
-              }`}>
-                {favoritesCount}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

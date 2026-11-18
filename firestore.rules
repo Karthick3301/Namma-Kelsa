@@ -49,6 +49,8 @@ service cloud.firestore {
       (!('imageUrls' in data) || (data.imageUrls is list && data.imageUrls.size() <= 12)) &&
       (!('unavailableDates' in data) || (data.unavailableDates is list && data.unavailableDates.size() <= 60)) &&
       (!('skillProficiencies' in data) || (data.skillProficiencies is map)) &&
+      (!('isSample' in data) || (data.isSample is bool)) &&
+      (!('verified' in data) || (data.verified is bool)) &&
       data.experience is number && data.experience >= 0 && data.experience <= 60 &&
       data.about is string && data.about.size() <= 1000 &&
       data.createdAt is timestamp &&
@@ -114,20 +116,29 @@ service cloud.firestore {
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
 
-      allow update: if isOwner(workerId)
-        && isValidId(workerId)
-        && isValidWorker(incoming())
-        && incoming().uid == existing().uid
-        && incoming().createdAt == existing().createdAt
-        && incoming().updatedAt == request.time
-        && (
-          // Action 1: Toggle availability or unavailable dates
-          (incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'updatedAt'])) ||
-          (incoming().diff(existing()).affectedKeys().hasOnly(['unavailableDates', 'updatedAt'])) ||
-          (incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'unavailableDates', 'updatedAt'])) ||
-          // Action 2: Update complete profile details
-          (incoming().diff(existing()).affectedKeys().hasAny(['name', 'phone', 'skills', 'dailyRate', 'locationName', 'latitude', 'longitude', 'photo', 'gallery', 'imageUrls', 'skillProficiencies', 'experience', 'about', 'unavailableDates', 'updatedAt']))
-        );
+      allow update: if isValidId(workerId) && (
+        (
+          isOwner(workerId)
+          && isValidWorker(incoming())
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            // Action 1: Toggle availability or unavailable dates or flags
+            (incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'updatedAt'])) ||
+            (incoming().diff(existing()).affectedKeys().hasOnly(['unavailableDates', 'updatedAt'])) ||
+            (incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'unavailableDates', 'updatedAt'])) ||
+            (incoming().diff(existing()).affectedKeys().hasOnly(['isSample', 'updatedAt'])) ||
+            (incoming().diff(existing()).affectedKeys().hasOnly(['verified', 'updatedAt'])) ||
+            // Action 2: Update complete profile details
+            (incoming().diff(existing()).affectedKeys().hasAny(['name', 'phone', 'skills', 'dailyRate', 'locationName', 'latitude', 'longitude', 'photo', 'gallery', 'imageUrls', 'skillProficiencies', 'experience', 'about', 'unavailableDates', 'isSample', 'verified', 'updatedAt']))
+          )
+        ) || (
+          // Allow tagging seeded sample documents with isSample: true without deleting data
+          incoming().diff(existing()).affectedKeys().hasOnly(['isSample'])
+          && incoming().isSample == true
+        )
+      );
 
       allow delete: if isOwner(workerId) && isValidId(workerId);
 

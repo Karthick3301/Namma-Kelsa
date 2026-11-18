@@ -337,26 +337,26 @@ export default function WorkerDashboard({
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn" id="worker-dashboard-panel">
+    <div className="space-y-6 animate-fadeIn w-full max-w-full box-border overflow-x-clip" id="worker-dashboard-panel">
       {/* Top Banner: Artisan Identity & Performance Overview */}
-      <div className="bg-gradient-to-r from-emerald-900 via-slate-900 to-emerald-950 text-white rounded-2xl p-4 sm:p-6 border border-emerald-800/60 shadow-md relative overflow-hidden">
+      <div className="bg-gradient-to-r from-emerald-900 via-slate-900 to-emerald-950 text-white rounded-2xl p-4 sm:p-6 border border-emerald-800/60 shadow-md relative overflow-hidden w-full max-w-full box-border">
         {/* Subtle geometric glowing accent */}
         <div className="absolute -top-16 -right-16 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
         
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 relative z-10 w-full max-w-full box-border">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
             <img 
               src={profile?.photo || "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=150"} 
               alt={profile?.name || workerName || "Worker"} 
               referrerPolicy="no-referrer"
-              className="w-16 h-16 rounded-2xl object-cover ring-2 ring-emerald-400 bg-slate-800 shrink-0"
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover ring-2 ring-emerald-400 bg-slate-800 shrink-0"
             />
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-extrabold tracking-tight text-white">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-white truncate max-w-full">
                   {profile?.name || workerName || "Artisan Dashboard"}
                 </h2>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0">
                   <Briefcase className="w-3 h-3 text-emerald-400" />
                   Active Artisan
                 </span>
@@ -383,14 +383,14 @@ export default function WorkerDashboard({
       </div>
 
       {/* Primary Key Performance Indicator Cards (Geometric Grid) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="w-full max-w-full box-border grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Total Completed Jobs */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:border-emerald-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+        <div className="w-full max-w-full box-border min-w-0 bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:border-emerald-300 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-mono min-w-0">
               Total Completed Jobs
             </span>
-            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0">
               <Briefcase className="w-4 h-4" />
             </div>
           </div>
@@ -410,12 +410,12 @@ export default function WorkerDashboard({
         </div>
 
         {/* KPI 2: Average Rating */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:border-amber-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+        <div className="w-full max-w-full box-border min-w-0 bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:border-amber-300 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-mono min-w-0">
               Average Rating
             </span>
-            <div className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
+            <div className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 shrink-0">
               <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
             </div>
           </div>
@@ -441,12 +441,12 @@ export default function WorkerDashboard({
         </div>
 
         {/* KPI 3: Customer Satisfaction */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:border-emerald-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+        <div className="w-full max-w-full box-border min-w-0 bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:border-emerald-300 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-mono min-w-0">
               Satisfaction Rate
             </span>
-            <div className="p-2 rounded-xl bg-teal-50 text-teal-700 border border-teal-100">
+            <div className="p-2 rounded-xl bg-teal-50 text-teal-700 border border-teal-100 shrink-0">
               <ThumbsUp className="w-4 h-4" />
             </div>
           </div>
@@ -465,12 +465,12 @@ export default function WorkerDashboard({
         </div>
 
         {/* KPI 4: Estimated Earnings */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:border-emerald-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+        <div className="w-full max-w-full box-border min-w-0 bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:border-emerald-300 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 font-mono min-w-0">
               Estimated Job Value
             </span>
-            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
@@ -489,7 +489,7 @@ export default function WorkerDashboard({
       <div 
         id="worker-earnings-chart-section"
         data-testid="worker-earnings-chart"
-        className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4 sm:space-y-5"
+        className="w-full max-w-full box-border overflow-hidden bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4 sm:space-y-5"
       >
         {/* Header with Title and Control Toggles */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-150 pb-4">
@@ -585,32 +585,32 @@ export default function WorkerDashboard({
         </div>
 
         {/* 4 Summary Stat Metrics Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/80">
-          <div>
+        <div className="w-full max-w-full box-border grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/80">
+          <div className="min-w-0">
             <span className="text-[10px] font-bold uppercase font-mono text-slate-400">
               {language === "kn" ? `ಒಟ್ಟು ಗಳಿಕೆ (${timeRange} ದಿನ)` : `Total Earnings (${timeRange}D)`}
             </span>
-            <p className="text-lg font-black text-emerald-800 font-mono mt-0.5">
+            <p className="text-lg font-black text-emerald-800 font-mono mt-0.5 truncate">
               ₹{totalRangeEarnings.toLocaleString("en-IN")}
             </p>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-[10px] font-bold uppercase font-mono text-slate-400">
               {language === "kn" ? "ದೈನಂದಿನ ಸರಾಸರಿ" : "Daily Average"}
             </span>
-            <p className="text-lg font-black text-slate-800 font-mono mt-0.5">
+            <p className="text-lg font-black text-slate-800 font-mono mt-0.5 truncate">
               ₹{avgDailyEarnings.toLocaleString("en-IN")}<span className="text-xs font-normal text-slate-400">/day</span>
             </p>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-[10px] font-bold uppercase font-mono text-slate-400">
               {language === "kn" ? "ಕೆಲಸದ ದಿನಗಳು" : "Active Work Days"}
             </span>
-            <p className="text-lg font-black text-slate-800 font-mono mt-0.5">
+            <p className="text-lg font-black text-slate-800 font-mono mt-0.5 truncate">
               {activeDaysCount} <span className="text-xs font-normal text-slate-400">of {chartData.length} days</span>
             </p>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-[10px] font-bold uppercase font-mono text-slate-400">
               {language === "kn" ? "ಹೆಚ್ಚು ಗಳಿಕೆಯ ದಿನ" : "Peak Single Day"}
             </span>
@@ -724,16 +724,16 @@ export default function WorkerDashboard({
       </div>
 
       {/* Middle Section: Rating Breakdown & Feedback Insights */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      <div className="w-full max-w-full box-border grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Rating Distribution Breakdown Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
+        <div className="w-full max-w-full box-border min-w-0 overflow-hidden bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <Award className="w-4 h-4 text-emerald-600" />
-                Rating Distribution
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 min-w-0">
+                <Award className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Rating Distribution</span>
               </h3>
-              <span className="text-[11px] font-mono text-slate-400">
+              <span className="text-[11px] font-mono text-slate-400 shrink-0">
                 {reviews.length} total
               </span>
             </div>
@@ -746,16 +746,16 @@ export default function WorkerDashboard({
                   : 0;
                 return (
                   <div key={stars} className="flex items-center gap-2 text-xs">
-                    <span className="w-7 font-mono font-bold text-slate-700 flex items-center gap-0.5">
+                    <span className="w-7 font-mono font-bold text-slate-700 flex items-center gap-0.5 shrink-0">
                       {stars} <Star className="w-3 h-3 fill-amber-400 text-amber-400 inline" />
                     </span>
-                    <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="flex-1 min-w-0 bg-slate-100 h-2 rounded-full overflow-hidden">
                       <div 
                         className="bg-amber-400 h-full rounded-full transition-all duration-500" 
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
-                    <span className="w-8 text-right font-mono text-slate-400 text-[11px]">
+                    <span className="w-8 text-right font-mono text-slate-400 text-[11px] shrink-0">
                       {count}
                     </span>
                   </div>
@@ -774,47 +774,47 @@ export default function WorkerDashboard({
         </div>
 
         {/* Quality Feedback Highlights */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-2 w-full max-w-full box-border min-w-0 overflow-hidden bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-600" />
-                Job Quality Highlights & Feedback Analysis
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 min-w-0">
+                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Job Quality Highlights & Feedback Analysis</span>
               </h3>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 shrink-0">
                 Live Insights
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5">
+              <div className="w-full max-w-full box-border min-w-0 bg-slate-50 border border-slate-200/80 rounded-xl p-3.5">
                 <span className="text-[10px] font-bold uppercase font-mono text-slate-400">Punctuality</span>
                 <p className="text-base font-extrabold text-slate-800 mt-1">100%</p>
                 <p className="text-[11px] text-slate-500 mt-0.5">On-time site visits reported</p>
               </div>
-              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5">
+              <div className="w-full max-w-full box-border min-w-0 bg-slate-50 border border-slate-200/80 rounded-xl p-3.5">
                 <span className="text-[10px] font-bold uppercase font-mono text-slate-400">Work Cleanliness</span>
                 <p className="text-base font-extrabold text-slate-800 mt-1">High Praise</p>
                 <p className="text-[11px] text-slate-500 mt-0.5">Clean job site and proper finishing</p>
               </div>
-              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5">
+              <div className="w-full max-w-full box-border min-w-0 bg-slate-50 border border-slate-200/80 rounded-xl p-3.5">
                 <span className="text-[10px] font-bold uppercase font-mono text-slate-400">Wage Transparency</span>
                 <p className="text-base font-extrabold text-slate-800 mt-1">Direct ₹ Deal</p>
                 <p className="text-[11px] text-slate-500 mt-0.5">Zero intermediary fees</p>
               </div>
             </div>
 
-            <div className="mt-4 p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-100 flex items-start gap-2.5">
+            <div className="w-full max-w-full box-border mt-4 p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-100 flex items-start gap-2.5">
               <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-600 leading-relaxed">
-                <strong>Reputation Tip:</strong> Customer reviews on Namma Kelasa come directly from real clients who booked your services. Completing jobs promptly and asking customers to submit direct feedback on your WorkerCard directly boosts your listing rank in your city!
+              <p className="text-xs text-slate-600 leading-relaxed min-w-0 break-words">
+                <strong>Reputation Tip:</strong> Customer reviews on Namma Kelasa come directly from real clients who booked your services. Completing jobs promptly and asking customers to submit direct feedback on your profile directly boosts your listing rank in your city!
               </p>
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-150 flex items-center justify-between flex-wrap gap-2 text-xs text-slate-500">
-            <span>Direct contact enabled for: <strong>{profile?.phone || "Phone not set"}</strong></span>
-            <span className="font-mono text-[11px] text-emerald-700 font-bold">
+            <span className="min-w-0 break-words">Direct contact enabled for: <strong>{profile?.phone || "Phone not set"}</strong></span>
+            <span className="font-mono text-[11px] text-emerald-700 font-bold shrink-0">
               {profile?.isAvailable ? "● Ready for Jobs Today" : "○ Currently Away"}
             </span>
           </div>
@@ -822,7 +822,7 @@ export default function WorkerDashboard({
       </div>
 
       {/* Bottom Section: Recent Customer Feedback Summaries */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
+      <div className="w-full max-w-full box-border min-w-0 bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-150 pb-4">
           <div>
             <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
@@ -881,7 +881,7 @@ export default function WorkerDashboard({
             </div>
             <h4 className="font-bold text-slate-800 text-sm">No Customer Feedback Yet</h4>
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-              When customers hire you and rate your work on your WorkerCard, their review text, star score, and timestamp will immediately appear in this dashboard.
+              When customers hire you and rate your work on your profile, their review text, star score, and timestamp will immediately appear in this dashboard.
             </p>
           </div>
         ) : (
@@ -889,16 +889,16 @@ export default function WorkerDashboard({
             {filteredReviews.map((rev) => (
               <div 
                 key={rev.id} 
-                className="bg-slate-50 hover:bg-slate-50/80 transition border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-3 shadow-2xs"
+                className="w-full max-w-full box-border min-w-0 bg-slate-50 hover:bg-slate-50/80 transition border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-3 shadow-2xs"
               >
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
                         {rev.authorName ? rev.authorName.charAt(0).toUpperCase() : "C"}
                       </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-xs">
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-slate-900 text-xs truncate">
                           {rev.authorName}
                         </h4>
                         <span className="text-[10px] text-slate-400 font-mono">
@@ -908,7 +908,7 @@ export default function WorkerDashboard({
                     </div>
 
                     {/* Star score */}
-                    <div className="flex items-center bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                    <div className="flex items-center bg-white px-2 py-0.5 rounded-lg border border-slate-200 shrink-0">
                       <span className="text-xs font-bold text-amber-500 mr-1 font-mono">{rev.rating}.0</span>
                       <div className="flex items-center">
                         {[1, 2, 3, 4, 5].map((s) => (
@@ -922,16 +922,16 @@ export default function WorkerDashboard({
                   </div>
 
                   {/* Comment Text */}
-                  <p className="text-xs text-slate-700 italic leading-relaxed bg-white p-3 rounded-lg border border-slate-150">
+                  <p className="text-xs text-slate-700 italic leading-relaxed bg-white p-3 rounded-lg border border-slate-150 break-words">
                     "{rev.comment}"
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
-                  <span className="flex items-center gap-1 text-emerald-700 font-semibold">
+                <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400 font-mono pt-1">
+                  <span className="flex items-center gap-1 text-emerald-700 font-semibold min-w-0 truncate">
                     Direct Customer Feedback
                   </span>
-                  <span>ID: {rev.id?.slice(0, 6)}...</span>
+                  <span className="shrink-0">ID: {rev.id?.slice(0, 6)}...</span>
                 </div>
               </div>
             ))}

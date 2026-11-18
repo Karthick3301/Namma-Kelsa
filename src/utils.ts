@@ -167,7 +167,7 @@ export const PRESET_AVATARS = [
   },
   {
     category: "gardening",
-    url: "https://images.unsplash.com/photo-1592417817098-8f3d6fe19665?auto=format&fit=crop&q=80&w=150",
+    url: "https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?auto=format&fit=crop&q=80&w=150",
     label: "Gardener (Deva)"
   },
   {
@@ -182,32 +182,28 @@ export const PRESET_GALLERIES = [
     category: "painting",
     urls: [
       "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=300"
+      "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=300"
     ]
   },
   {
     category: "plumbing",
     urls: [
-      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=300"
+      "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&q=80&w=300",
+      "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=300"
     ]
   },
   {
     category: "electrical",
     urls: [
-      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=300"
+      "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&q=80&w=300",
+      "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&q=80&w=300"
     ]
   },
   {
     category: "gardening",
     urls: [
-      "https://images.unsplash.com/photo-1558904541-efa8c1a68fc6?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=300"
+      "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&q=80&w=300",
+      "https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?auto=format&fit=crop&q=80&w=300"
     ]
   }
 ];
@@ -223,16 +219,15 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     latitude: 22.5726,
     longitude: 88.3639,
     isAvailable: true,
+    isSample: true,
     photo: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
       "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600",
-      "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=600",
-      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600"
+      "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=600"
     ],
     gallery: [
       "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300"
+      "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=300"
     ],
     experience: 8,
     about: "Expert painter and tiler with excellent speed and 8+ years executing high quality clean finishes. Dedicated to durable residential and commercial work."
@@ -247,16 +242,15 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     latitude: 19.0760,
     longitude: 72.8777,
     isAvailable: true,
+    isSample: true,
     photo: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
-      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600",
-      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600",
-      "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=600"
+      "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&q=80&w=600",
+      "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&q=80&w=600"
     ],
     gallery: [
-      "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1502005229762-fc1b2b812ca5?auto=format&fit=crop&q=80&w=300"
+      "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&q=80&w=300",
+      "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&q=80&w=300"
     ],
     experience: 5,
     about: "Certified home electrician & skilled water line plumber. Focused on solving leaks and wire shorts efficiently with honest upfront estimates."
@@ -271,16 +265,15 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     latitude: 28.6139,
     longitude: 77.2090,
     isAvailable: true,
-    photo: "https://images.unsplash.com/photo-1592417817098-8f3d6fe19665?auto=format&fit=crop&q=80&w=150",
+    isSample: true,
+    photo: "https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
-      "https://images.unsplash.com/photo-1558904541-efa8c1a68fc6?auto=format&fit=crop&q=80&w=600",
-      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600",
-      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600"
+      "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&q=80&w=600",
+      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600"
     ],
     gallery: [
-      "https://images.unsplash.com/photo-1558904541-efa8c1a68fc6?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=300",
-      "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=300"
+      "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&q=80&w=300",
+      "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=300"
     ],
     experience: 12,
     about: "Passionate community gardener and stone mason offering complete lawn care, flower beds, and sturdy boundary wall plastering."
@@ -295,6 +288,7 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     latitude: 13.0827,
     longitude: 80.2707,
     isAvailable: true,
+    isSample: true,
     photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
       "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600",
@@ -317,6 +311,7 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     latitude: 17.3850,
     longitude: 78.4867,
     isAvailable: true,
+    isSample: true,
     photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
       "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600",
@@ -338,6 +333,7 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     latitude: 18.5204,
     longitude: 73.8567,
     isAvailable: true,
+    isSample: true,
     photo: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
       "https://images.unsplash.com/photo-1558904541-efa8c1a68fc6?auto=format&fit=crop&q=80&w=600"
@@ -358,6 +354,7 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     latitude: 26.9124,
     longitude: 75.7873,
     isAvailable: true,
+    isSample: true,
     photo: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
       "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600"
@@ -378,6 +375,7 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     latitude: 26.8467,
     longitude: 80.9462,
     isAvailable: true,
+    isSample: true,
     photo: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
       "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600"
@@ -398,6 +396,7 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     latitude: 16.5062,
     longitude: 80.6480,
     isAvailable: true,
+    isSample: true,
     photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
     imageUrls: [
       "https://images.unsplash.com/photo-1581094288338-2314dddb7ecc?auto=format&fit=crop&q=80&w=600"
@@ -409,6 +408,64 @@ export const MOCK_WORKERS: Partial<WorkerProfile>[] = [
     about: "Master plumber and pump technician in Vijayawada. Expert in high-pressure piping, bathroom fittings, and residential electric motor wiring."
   }
 ];
+
+const SEEDED_SAMPLE_NAMES = new Set([
+  "magi nandhu",
+  "gurumurthy swamy",
+  "gurumurthy swamy (demo)",
+  ...MOCK_WORKERS.map((w) => (w.name || "").trim().toLowerCase()).filter(Boolean)
+]);
+
+const SEEDED_STOCK_AVATARS = new Set(PRESET_AVATARS.map((a) => a.url));
+
+const SEEDED_STOCK_GALLERY_URLS = new Set([
+  "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&q=80&w=600",
+  "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&q=80&w=600",
+  "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&q=80&w=600",
+  "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&q=80&w=600",
+  "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=600",
+  ...PRESET_GALLERIES.flatMap((g) => g.urls)
+]);
+
+/**
+ * Detects whether a worker profile is a seeded sample/demo profile
+ * (e.g., "Magi Nandhu" with stock photos or MOCK_WORKERS entries).
+ */
+export function isSeededSampleWorker(worker: Partial<WorkerProfile> | Record<string, any>): boolean {
+  if (!worker) return false;
+  if (worker.isSample === true) return true;
+
+  const uid = String(worker.uid || "").trim().toLowerCase();
+  if (uid.startsWith("mock-") || uid.startsWith("demo-") || uid.startsWith("sample-")) {
+    return true;
+  }
+
+  const normalizedName = String(worker.name || "").trim().toLowerCase();
+  if (
+    SEEDED_SAMPLE_NAMES.has(normalizedName) ||
+    normalizedName.includes("magi nandhu")
+  ) {
+    return true;
+  }
+
+  // Also detect seeded profiles created using both a preset stock avatar and preset stock gallery URLs
+  const photo = String(worker.photo || "").trim();
+  const workUrls: string[] = Array.isArray(worker.imageUrls)
+    ? worker.imageUrls
+    : Array.isArray(worker.gallery)
+      ? worker.gallery
+      : [];
+  if (
+    photo &&
+    SEEDED_STOCK_AVATARS.has(photo) &&
+    workUrls.length > 0 &&
+    workUrls.every((u) => typeof u === "string" && SEEDED_STOCK_GALLERY_URLS.has(u.trim()))
+  ) {
+    return true;
+  }
+
+  return false;
+}
 
 /**
  * Format a Date object to 'YYYY-MM-DD' ISO format based on local date.

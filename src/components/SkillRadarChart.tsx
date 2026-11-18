@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   Tooltip
 } from "recharts";
-import { Sparkles, Sliders, Award, Info, CheckCircle2 } from "lucide-react";
+import { Sparkles, Sliders, Award, CheckCircle2 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 
 export interface SkillRadarChartProps {
@@ -44,23 +44,23 @@ export const SkillRadarChart: React.FC<SkillRadarChartProps> = ({
     return Math.min(95, Math.max(65, 75 + Math.min(experienceYears, 10) * 2));
   };
 
-  // Fixed foundational craftsmanship benchmarks to ensure radar geometry is valid (>= 3 points)
+  // Fixed foundational craftsmanship benchmarks to ensure chart geometry is valid (>= 3 points)
   const craftBenchmarks = useMemo(() => {
     return [
       {
-        subject: language === "kn" ? "ಕೆಲಸದ ಗುಣಮಟ್ಟ" : "Work Quality",
+        subject: t("workQualityBenchmark"),
         proficiency: 92,
         fullMark: 100,
         isTradeSkill: false
       },
       {
-        subject: language === "kn" ? "ಸಮಯಪಾಲನೆ" : "Punctuality",
+        subject: t("punctualityBenchmark"),
         proficiency: 90,
         fullMark: 100,
         isTradeSkill: false
       },
       {
-        subject: language === "kn" ? "ಸುರಕ್ಷತೆ ಮತ್ತು ಉಪಕರಣ" : "Safety & Tools",
+        subject: t("safetyToolsBenchmark"),
         proficiency: 88,
         fullMark: 100,
         isTradeSkill: false
@@ -115,13 +115,13 @@ export const SkillRadarChart: React.FC<SkillRadarChartProps> = ({
 
   // Level classification badge
   const getProficiencyTier = (val: number) => {
-    if (val >= 90) return { label: "Master", color: "text-amber-700 bg-amber-100 border-amber-300" };
-    if (val >= 80) return { label: "Advanced", color: "text-emerald-700 bg-emerald-100 border-emerald-300" };
-    if (val >= 70) return { label: "Skilled", color: "text-blue-700 bg-blue-100 border-blue-300" };
-    return { label: "Competent", color: "text-slate-700 bg-slate-100 border-slate-300" };
+    if (val >= 90) return { label: t("tierMaster"), color: "text-amber-700 bg-amber-100 border-amber-300" };
+    if (val >= 80) return { label: t("tierAdvanced"), color: "text-emerald-700 bg-emerald-100 border-emerald-300" };
+    if (val >= 70) return { label: t("tierSkilled"), color: "text-blue-700 bg-blue-100 border-blue-300" };
+    return { label: t("tierCompetent"), color: "text-slate-700 bg-slate-100 border-slate-300" };
   };
 
-  // Custom Radar Tooltip
+  // Custom Tooltip
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload as RadarDataPoint;
@@ -137,7 +137,7 @@ export const SkillRadarChart: React.FC<SkillRadarChartProps> = ({
           </div>
           {!data.isTradeSkill && (
             <p className="text-[10px] text-slate-400 mt-1 italic">
-              Craftsmanship Baseline
+              {t("craftsmanshipStandards")}
             </p>
           )}
         </div>
@@ -161,9 +161,6 @@ export const SkillRadarChart: React.FC<SkillRadarChartProps> = ({
             </div>
             <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
               <span>{t("skillRadarTitle")}</span>
-              <span className="text-[10px] font-sans font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                Recharts
-              </span>
             </h4>
           </div>
           <p className="text-[11px] text-slate-500 mt-0.5">
@@ -186,7 +183,7 @@ export const SkillRadarChart: React.FC<SkillRadarChartProps> = ({
         )}
       </div>
 
-      {/* Main Content Area: Radar Canvas & Interactive Sliders */}
+      {/* Main Content Area: Chart & Interactive Sliders */}
       {skills.length === 0 ? (
         <div className="py-8 px-4 text-center bg-slate-50/70 rounded-xl border border-dashed border-slate-200">
           <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
@@ -196,12 +193,12 @@ export const SkillRadarChart: React.FC<SkillRadarChartProps> = ({
             {t("selectSkillsFirstForRadar")}
           </p>
           <p className="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
-            Choose your skills from the tags above (e.g. Painting, Plumbing, Carpentry) to generate a personalized radar competency map.
+            {t("pickSkillHintForLevel")}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-          {/* Radar Chart Display */}
+          {/* Chart Display */}
           <div className="md:col-span-6 flex flex-col items-center justify-center bg-white/90 rounded-xl border border-slate-200/80 p-2 shadow-2xs">
             <div className="w-full h-64 sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -218,7 +215,7 @@ export const SkillRadarChart: React.FC<SkillRadarChartProps> = ({
                     tick={{ fill: "#64748b", fontSize: 10 }}
                   />
                   <Radar
-                    name="Proficiency"
+                    name="Level"
                     dataKey="proficiency"
                     stroke="#059669"
                     fill="#10b981"
@@ -231,30 +228,15 @@ export const SkillRadarChart: React.FC<SkillRadarChartProps> = ({
                 </RadarChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-slate-500 font-mono mt-1">
-              <span className="flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-                <span>Self-Assessed Score (0-100)</span>
-              </span>
-              {skills.length < 3 && (
-                <span className="flex items-center gap-1 text-slate-400">
-                  <Info className="w-3 h-3" />
-                  <span>Padded with Core Standards</span>
-                </span>
-              )}
-            </div>
           </div>
 
-          {/* Interactive Proficiency Tuning Sliders */}
+          {/* Interactive Sliders */}
           <div className="md:col-span-6 space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase font-mono tracking-wider">
                 <Sliders className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Fine-Tune Skill Proficiencies</span>
+                <span>{t("setYourLevel")}</span>
               </label>
-              <span className="text-[10px] text-slate-400">
-                Live updates chart
-              </span>
             </div>
 
             <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
@@ -314,29 +296,29 @@ export const SkillRadarChart: React.FC<SkillRadarChartProps> = ({
 
             {/* Quick Presets / Help */}
             {isEditable && onChangeProficiency && (
-              <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-100 text-[10px]">
-                <span className="text-slate-400 font-mono">Quick Set All:</span>
-                <div className="flex items-center gap-1">
+              <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-100 text-[10px] flex-wrap">
+                <span className="text-slate-400 font-mono">{t("quickSetAll")}</span>
+                <div className="flex items-center gap-1 flex-wrap">
                   <button
                     type="button"
                     onClick={() => skills.forEach(s => onChangeProficiency(s, 75))}
                     className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-semibold transition cursor-pointer"
                   >
-                    Competent (75%)
+                    {t("tierSkilled")} (75%)
                   </button>
                   <button
                     type="button"
                     onClick={() => skills.forEach(s => onChangeProficiency(s, 85))}
                     className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded font-bold border border-emerald-200 transition cursor-pointer"
                   >
-                    Advanced (85%)
+                    {t("tierAdvanced")} (85%)
                   </button>
                   <button
                     type="button"
                     onClick={() => skills.forEach(s => onChangeProficiency(s, 95))}
                     className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded font-bold border border-amber-200 transition cursor-pointer"
                   >
-                    Master (95%)
+                    {t("tierMaster")} (95%)
                   </button>
                 </div>
               </div>
